@@ -2,13 +2,6 @@
 requires = [
     "setuptools",
     "wheel",
-    "relenv@git+https://github.com/saltstack/relative-environment-for-python@buildenv",
 ]
 build-backend = "build"
-backend-path = ["src/relenv_gdb"]
-
-[tool.isort]
-skip = "src/relenv_gdb/libpython.py"
-
-[tool.black]
-force_exclude = "libpython.py"
+backend-path = ["src/ppt"]
