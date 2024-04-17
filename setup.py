@@ -2,6 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 from setuptools import Distribution, setup
+#from setuptools.command.install import install
+
+
+#class CustomInstallCommand(install):
+#    def run(self):
+#        print("Here is where I would be running my code...")
+#        install.run(self)
 
 
 class BinaryDistribution(Distribution):
@@ -11,4 +18,7 @@ class BinaryDistribution(Distribution):
 
 setup(
     distclass=BinaryDistribution,
+#    cmdclass={
+#        "isntall": CustomInstallCommand
+#    }
 )
