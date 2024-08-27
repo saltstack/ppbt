@@ -1,8 +1,8 @@
-# Copyright 2023-2024 VMware, Inc.
+# Copyright 2024 Broadcom Corporation.
 # SPDX-License-Identifier: Apache-2.0
 #
 """
-Build our python wheel.
+Build a ppt wheel which includes a toolchain archive.
 """
 import contextlib
 import http.client
@@ -14,19 +14,12 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import textwrap
 import time
 
 from setuptools.build_meta import *
 
-# relenv package version
-__version__ = "0.14.2"
-
 MODULE_DIR = pathlib.Path(__file__).resolve().parent
 
-LINUX = "linux"
-WIN32 = "win32"
-DARWIN = "darwin"
 
 CT_NG_VER = "1.26.0"
 CT_URL = "http://crosstool-ng.org/download/crosstool-ng/crosstool-ng-{version}.tar.bz2"
@@ -34,34 +27,12 @@ CT_GIT_REPO = "https://github.com/crosstool-ng/crosstool-ng.git"
 TC_URL = "https://{hostname}/relenv/{version}/toolchain/{host}/{triplet}.tar.xz"
 CICD = "CI" in os.environ
 
-CHECK_HOSTS = ("repo.saltproject.io", "woz.io")
-
-arches = {
-    LINUX: (
-        "x86_64",
-        "aarch64",
-    ),
-    DARWIN: ("x86_64", "arm64"),
-    WIN32: (
-        "amd64",
-        "x86",
-        #    "arm64", # Python 11 should support arm.
-    ),
-}
-
-
 if sys.platform == "win32":
     DEFAULT_DATA_DIR = pathlib.Path.home() / "AppData" / "Local" / "ppt"
 else:
     DEFAULT_DATA_DIR = pathlib.Path.home() / ".local" / "ppt"
 
 DATA_DIR = pathlib.Path(os.environ.get("PPT_DATA", DEFAULT_DATA_DIR)).resolve()
-
-
-class PPTException(Exception):
-    """
-    Base class for exeptions generated from ppt.
-    """
 
 
 def build_arch():
@@ -100,52 +71,6 @@ def get_triplet(machine=None, plat=None):
         return f"{machine}-linux-gnu"
     else:
         raise RelenvException(f"Unknown platform {plat}")
-
-
-def plat_from_triplet(plat):
-    """
-    Convert platform from build to the value of sys.platform.
-    """
-    if plat == "linux-gnu":
-        return "linux"
-    elif plat == "macos":
-        return "darwin"
-    elif plat == "win":
-        return "win32"
-    raise RelenvException(f"Unkown platform {plat}")
-
-
-def list_archived_builds():
-    """
-    Return a list of version, architecture and platforms for builds.
-    """
-    builds = []
-    dirs = work_dirs(DATA_DIR)
-    for root, dirs, files in os.walk(dirs.build):
-        for file in files:
-            if file.endswith(".tar.xz"):
-                file = file[:-7]
-                version, triplet = file.split("-", 1)
-                arch, plat = triplet.split("-", 1)
-                builds.append((version, arch, plat))
-    return builds
-
-
-def archived_build(triplet=None):
-    """
-    Finds a the location of an archived build.
-
-    :param triplet: The build triplet to find
-    :type triplet: str
-
-    :return: The location of the archived build
-    :rtype: ``pathlib.Path``
-    """
-    if not triplet:
-        triplet = get_triplet()
-    dirs = work_dirs(DATA_DIR)
-    archive = f"{triplet}.tar.xz"
-    return dirs.build / archive
 
 
 def extract_archive(to_dir, archive):
@@ -307,26 +232,6 @@ def pushd(path):
         os.chdir(orig)
 
 
-def _configure_ctng(ctngdir, dirs):
-    """
-    Configure crosstool-ng.
-
-    :param ctngdir: The directory holding crosstool-ng
-    :type ctngdir: str
-    :param dirs: The working directories
-    :type dirs: ``relenv.common.WorkDirs``
-    """
-    if not ctngdir.exists():
-        url = CT_URL.format(version=CT_NG_VER)
-        archive = download_url(url, dirs.toolchain)
-        extract_archive(dirs.toolchain, archive)
-    os.chdir(ctngdir)
-    ctng = ctngdir / "ct-ng"
-    if not ctng.exists():
-        runcmd(["./configure", "--enable-local"])
-        runcmd(["make"])
-
-
 def build_ppt(static=False, branch=None):
     """Compile and install gdb to the prefix."""
     cwd = os.getcwd()
@@ -336,7 +241,7 @@ def build_ppt(static=False, branch=None):
         DATA_DIR.mkdir(exist_ok=True)
 
         if branch:
-            ctngdir = DATA_DIR / f"crosstool-ng"
+            ctngdir = DATA_DIR / "crosstool-ng"
             if not ctngdir.exists():
                 os.chdir(DATA_DIR)
                 subprocess.run(["git", "clone", "-b", barnch, CT_GIT_REPO])
