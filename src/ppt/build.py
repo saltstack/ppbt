@@ -109,24 +109,6 @@ def get_download_location(url, dest):
     return os.path.join(dest, os.path.basename(url))
 
 
-def check_url(url, timeout=30):
-    """
-    Check that the url returns a 200.
-    """
-    # Late import so we do not import hashlib before runtime.bootstrap is called.
-    import urllib.request
-
-    fin = None
-    try:
-        fin = urllib.request.urlopen(url, timeout=timeout)
-    except Exception:
-        return False
-    finally:
-        if fin:
-            fin.close()
-    return True
-
-
 def fetch_url(url, fp, backoff=3, timeout=30):
     """
     Fetch the contents of a url.
