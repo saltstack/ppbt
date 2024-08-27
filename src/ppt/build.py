@@ -9,8 +9,8 @@ import http.client
 import os
 import pathlib
 import platform
-import subprocess
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -70,7 +70,6 @@ def build_arch():
     """
     machine = platform.machine()
     return machine.lower()
-
 
 
 def get_triplet(machine=None, plat=None):
@@ -374,11 +373,12 @@ def build_ppt(static=False, branch=None):
         archdir = toolchain / triplet
         print(f"Arch dir is {archdir}")
 
-
         if archdir.exists():
             print("Toolchain directory exists: {}".format(archdir))
         else:
-            config = MODULE_DIR / "_config" / machine / "{}-ct-ng.config".format(triplet)
+            config = (
+                MODULE_DIR / "_config" / machine / "{}-ct-ng.config".format(triplet)
+            )
             if not config.exists():
                 print("Toolchain config missing: {}".format(config))
                 sys.exit(1)
@@ -441,6 +441,4 @@ def build_wheel(wheel_directory, metadata_directory=None, config_settings=None):
     else:
         with tempfile.TemporaryDirectory() as tmp_dist_dir:
             build_ppt(tmp_dist_dir)
-            return _build_wheel(
-                wheel_directory, metadata_directory, config_settings
-            )
+            return _build_wheel(wheel_directory, metadata_directory, config_settings)
