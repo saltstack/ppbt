@@ -1,24 +1,17 @@
-# Copyright 2023 VMware, Inc.
+# Copyright 2024 Broadcom Corporation.
 # SPDX-License-Identifier: Apache-2.0
 #
 from setuptools import Distribution, setup
-#from setuptools.command.install import install
+import platform
 
 
-#class CustomInstallCommand(install):
-#    def run(self):
-#        print("Here is where I would be running my code...")
-#        install.run(self)
-
-
-class BinaryDistribution(Distribution):
-    def has_ext_modules(self):
-        return True
+uname = platform.uname()
 
 
 setup(
-    distclass=BinaryDistribution,
-#    cmdclass={
-#        "isntall": CustomInstallCommand
-#    }
+    options={
+        "bdist_wheel": {
+          "plat_name": f"{uname.system.lower()}_{uname.machine.lower()}",
+        }
+    }
 )

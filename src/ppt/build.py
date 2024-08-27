@@ -28,8 +28,9 @@ LINUX = "linux"
 WIN32 = "win32"
 DARWIN = "darwin"
 
-CT_NG_VER = "1.25.0"
+CT_NG_VER = "1.26.0"
 CT_URL = "http://crosstool-ng.org/download/crosstool-ng/crosstool-ng-{version}.tar.bz2"
+CT_GIT_REPO = "https://github.com/crosstool-ng/crosstool-ng.git"
 TC_URL = "https://{hostname}/relenv/{version}/toolchain/{host}/{triplet}.tar.xz"
 CICD = "CI" in os.environ
 
@@ -70,122 +71,6 @@ def build_arch():
     machine = platform.machine()
     return machine.lower()
 
-
-def work_root(root=None):
-    """
-    Get the root directory that all other relenv working directories should be based on.
-
-    :param root: An explicitly requested root directory
-    :type root: str
-
-    :return: An absolute path to the relenv root working directory
-    :rtype: ``pathlib.Path``
-    """
-    if root is not None:
-        base = pathlib.Path(root).resolve()
-    else:
-        base = MODULE_DIR
-    return base
-
-
-def work_dir(name, root=None):
-    """
-    Get the absolute path to the relenv working directory of the given name.
-
-    :param name: The name of the directory
-    :type name: str
-    :param root: The root directory that this working directory will be relative to
-    :type root: str
-
-    :return: An absolute path to the requested relenv working directory
-    :rtype: ``pathlib.Path``
-    """
-    root = work_root(root)
-    if root == MODULE_DIR:
-        base = root / "_{}".format(name)
-    else:
-        base = root / name
-    return base
-
-
-class WorkDirs:
-    """
-    Simple class used to hold references to working directories relenv uses relative to a given root.
-
-    :param root: The root of the working directories tree
-    :type root: str
-    """
-
-    def __init__(self, root):
-        self.root = root
-        self.toolchain_config = work_dir("toolchain", self.root)
-        self.toolchain = work_dir("toolchain", DATA_DIR)
-        self.build = work_dir("build", DATA_DIR)
-        self.src = work_dir("src", DATA_DIR)
-        self.logs = work_dir("logs", DATA_DIR)
-        self.download = work_dir("download", DATA_DIR)
-
-    def __getstate__(self):
-        """
-        Return an object used for pickling.
-
-        :return: The picklable state
-        """
-        return {
-            "root": self.root,
-            "toolchain_config": self.toolchain_config,
-            "toolchain": self.toolchain,
-            "build": self.build,
-            "src": self.src,
-            "logs": self.logs,
-            "download": self.download,
-        }
-
-    def __setstate__(self, state):
-        """
-        Unwrap the object returned from unpickling.
-
-        :param state: The state to unpickle
-        :type state: dict
-        """
-        self.root = state["root"]
-        self.toolchain_config = state["toolchain_config"]
-        self.toolchain = state["toolchain"]
-        self.build = state["build"]
-        self.src = state["src"]
-        self.logs = state["logs"]
-        self.download = state["download"]
-
-
-def work_dirs(root=None):
-    """
-    Returns a WorkDirs instance based on the given root.
-
-    :param root: The desired root of relenv's working directories
-    :type root: str
-
-    :return: A WorkDirs instance based on the given root
-    :rtype: ``relenv.common.WorkDirs``
-    """
-    return WorkDirs(work_root(root))
-
-
-def get_toolchain(arch=None, root=None):
-    """
-    Get a the toolchain directory, specific to the arch if supplied.
-
-    :param arch: The architecture to get the toolchain for
-    :type arch: str
-    :param root: The root of the relenv working directories to search in
-    :type root: str
-
-    :return: The directory holding the toolchain
-    :rtype: ``pathlib.Path``
-    """
-    dirs = work_dirs(root)
-    if arch:
-        return dirs.toolchain / "{}-linux-gnu".format(arch)
-    return dirs.toolchain
 
 
 def get_triplet(machine=None, plat=None):
@@ -443,19 +328,25 @@ def _configure_ctng(ctngdir, dirs):
         runcmd(["make"])
 
 
-def build_ppt(static=False):
+def build_ppt(static=False, branch=None):
     """Compile and install gdb to the prefix."""
     cwd = os.getcwd()
     try:
-        dirs = work_dirs()
-        if not dirs.toolchain.exists():
-            os.makedirs(dirs.toolchain)
 
-        ctngdir = dirs.toolchain / "crosstool-ng-{}".format(CT_NG_VER)
-        if not ctngdir.exists():
-            url = CT_URL.format(version=CT_NG_VER)
-            archive = download_url(url, dirs.toolchain)
-            extract_archive(dirs.toolchain, archive)
+        DATA_DIR.parent.mkdir(exist_ok=True)
+        DATA_DIR.mkdir(exist_ok=True)
+
+        if branch:
+            ctngdir = DATA_DIR / f"crosstool-ng"
+            if not ctngdir.exists():
+                os.chdir(DATA_DIR)
+                subprocess.run(["git", "clone", "-b", barnch, CT_GIT_REPO])
+        else:
+            ctngdir = DATA_DIR / f"crosstool-ng-{CT_NG_VER}"
+            if not ctngdir.exists():
+                url = CT_URL.format(version=CT_NG_VER)
+                archive = download_url(url, DATA_DIR)
+                extract_archive(DATA_DIR, archive)
 
         os.chdir(ctngdir)
 
@@ -467,25 +358,27 @@ def build_ppt(static=False):
             print(f"Compiling ct-ng: {ctng}")
             runcmd(["./configure", "--enable-local"])
             runcmd(["make"])
-        print(f"ct-ng compiled: {ctng}")
 
-        os.chdir(dirs.toolchain)
+        print(f"ct-ng compiled: {ctng}")
 
         arch = build_arch()
         machine = platform.machine()
+        toolchain = MODULE_DIR / "_toolchain"
 
-        if static:
-            toolchain = dirs.toolchain
-        else:
-            toolchain = pathlib.Path(__file__).parent / "_toolchain"
         print(f"toolchain: {toolchain}")
+
+        toolchain.mkdir(exist_ok=True)
         os.chdir(toolchain)
+
         triplet = get_triplet(arch)
         archdir = toolchain / triplet
+        print(f"Arch dir is {archdir}")
+
+
         if archdir.exists():
             print("Toolchain directory exists: {}".format(archdir))
         else:
-            config = dirs.toolchain_config / machine / "{}-ct-ng.config".format(triplet)
+            config = MODULE_DIR / "_config" / machine / "{}-ct-ng.config".format(triplet)
             if not config.exists():
                 print("Toolchain config missing: {}".format(config))
                 sys.exit(1)
@@ -515,6 +408,8 @@ def build_ppt(static=False):
                 env=env,
             )
 
+        os.chdir(toolchain)
+
         archive = f"{ triplet }.tar.xz"
         print(f"Archive is {archive}")
         with tarfile.open(archive, mode="w:xz") as fp:
@@ -523,16 +418,24 @@ def build_ppt(static=False):
                 for f in files:
                     relpath = relroot / f
                     print(f"Adding {relpath}")
-                    fp.add(relpath, relpath, recursive=False)
-        shutil.move(archive, dirs.toolchain_config)
+                    try:
+                        fp.add(relpath, relpath, recursive=False)
+                    except FileNotFoundError:
+                        print(f"File not found while archiving: {relpath}")
+
+        shutil.rmtree(archdir)
     finally:
         os.chdir(cwd)
 
 
 def build_wheel(wheel_directory, metadata_directory=None, config_settings=None):
     """PEP 517 wheel creation hook."""
+    print("*" * 80)
+    print(config_settings)
+    print("*" * 80)
     static_build_dir = os.environ.get("PY_STATIC_BUILD_DIR", "")
     if static_build_dir:
+        print("BUILD STATIC")
         build_ppt(static_build_dir)
         return _build_wheel(wheel_directory, metadata_directory, config_settings)
     else:
