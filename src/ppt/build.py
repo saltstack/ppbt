@@ -16,7 +16,7 @@ import tarfile
 import tempfile
 import time
 
-from setuptools.build_meta import *
+from setuptools.build_meta import build_wheel
 
 MODULE_DIR = pathlib.Path(__file__).resolve().parent
 
@@ -34,6 +34,7 @@ else:
 
 DATA_DIR = pathlib.Path(os.environ.get("PPT_DATA", DEFAULT_DATA_DIR)).resolve()
 
+_build_wheel = build_wheel
 
 def build_arch():
     """
@@ -198,20 +199,6 @@ def runcmd(*args, **kwargs):
     return proc
 
 
-_build_wheel = build_wheel
-
-
-@contextlib.contextmanager
-def pushd(path):
-    """
-    A pushd context manager.
-    """
-    orig = os.getcwd()
-    try:
-        os.chdir(path)
-        yield
-    finally:
-        os.chdir(orig)
 
 
 def build_ppt(static=False, branch=None):
