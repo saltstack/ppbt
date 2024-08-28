@@ -4,5 +4,4 @@ __pycache__
 dist/
 build/
 *.egg-info
-.pre-commit-hooks/
 src/ppt/_toolchain/

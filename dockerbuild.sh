@@ -5,4 +5,7 @@ docker run --rm -v $(pwd):/src debian:11 \
             texinfo unzip help2man gawk libtool-bin libncurses5-dev \
             bison wget rsync ;
          cd /src; \
-         python3 -m build"
+         python3 -m venv venv; \
+         venv/bin/pip install build; \
+         venv/bin/python3 -m build; \
+         chown -R $UID dist build src/ppt/_toolchain/"

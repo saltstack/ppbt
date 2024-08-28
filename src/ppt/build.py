@@ -1,10 +1,9 @@
-# Copyright 2024 Broadcom Corporation.
+# Copyright 2024 Broadcom Corporation
 # SPDX-License-Identifier: Apache-2.0
 #
 """
 Build a ppt wheel which includes a toolchain archive.
 """
-import contextlib
 import http.client
 import os
 import pathlib
@@ -13,28 +12,30 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import tempfile
 import time
+import urllib.error
+import urllib.request
 
-from setuptools.build_meta import build_wheel
-
-MODULE_DIR = pathlib.Path(__file__).resolve().parent
-
+from setuptools.build_meta import build_sdist, build_wheel
 
 CT_NG_VER = "1.26.0"
 CT_URL = "http://crosstool-ng.org/download/crosstool-ng/crosstool-ng-{version}.tar.bz2"
 CT_GIT_REPO = "https://github.com/crosstool-ng/crosstool-ng.git"
 TC_URL = "https://{hostname}/relenv/{version}/toolchain/{host}/{triplet}.tar.xz"
 CICD = "CI" in os.environ
-
-if sys.platform == "win32":
-    DEFAULT_DATA_DIR = pathlib.Path.home() / "AppData" / "Local" / "ppt"
-else:
-    DEFAULT_DATA_DIR = pathlib.Path.home() / ".local" / "ppt"
-
-DATA_DIR = pathlib.Path(os.environ.get("PPT_DATA", DEFAULT_DATA_DIR)).resolve()
+PATCHELF_VERSION = "0.18.0"
+PATCHELF_SOURCE = (
+    f"https://github.com/NixOS/patchelf/releases/download/"
+    f"{PATCHELF_VERSION}/patchelf-{PATCHELF_VERSION}.tar.gz"
+)
 
 _build_wheel = build_wheel
+_build_sdist = build_sdist
+
+
+class BuildError(RuntimeError):
+    """Generic build error."""
+
 
 def build_arch():
     """
@@ -55,7 +56,7 @@ def get_triplet(machine=None, plat=None):
     :param plat: The platform for the triplet
     :type plat: str
 
-    :raises RelenvException: If the platform is unknown
+    :raises BuildError: If the platform is unknown
 
     :return: The target triplet
     :rtype: str
@@ -71,7 +72,7 @@ def get_triplet(machine=None, plat=None):
     elif plat == "linux":
         return f"{machine}-linux-gnu"
     else:
-        raise RelenvException(f"Unknown platform {plat}")
+        raise BuildError(f"Unknown platform {plat}")
 
 
 def extract_archive(to_dir, archive):
@@ -116,10 +117,6 @@ def fetch_url(url, fp, backoff=3, timeout=30):
 
     This method will store the contents in the given file like object.
     """
-    # Late import so we do not import hashlib before runtime.bootstrap is called.
-    import urllib.error
-    import urllib.request
-
     if backoff < 1:
         backoff = 1
     n = 0
@@ -143,7 +140,6 @@ def fetch_url(url, fp, backoff=3, timeout=30):
             block = fin.read(10240)
     finally:
         fin.close()
-        # fp.close()
 
 
 def download_url(url, dest, verbose=True, backoff=3, timeout=60):
@@ -191,67 +187,72 @@ def runcmd(*args, **kwargs):
     :return: The process result
     :rtype: ``subprocess.CompletedProcess``
 
-    :raises RelenvException: If the command finishes with a non zero exit code
+    :raises BuildError: If the command finishes with a non zero exit code
     """
     proc = subprocess.run(*args, **kwargs)
     if proc.returncode != 0:
-        raise BaseException("Build cmd '{}' failed".format(" ".join(args[0])))
+        raise BuildError("Build cmd '{}' failed".format(" ".join(args[0])))
     return proc
 
 
+def build_ppt(branch=None):
+    """Build a toolchain and include it in the wheel.
 
-
-def build_ppt(static=False, branch=None):
-    """Compile and install gdb to the prefix."""
+    - Downloads and installs crosstool-ng for building a toolchain.
+    - Compile a toolchain
+    - Add patchelf to the toolchain's binaries
+    - Create a tarball to be included in the wheel
+    """
     cwd = os.getcwd()
+    archdir = None
     try:
-
-        DATA_DIR.parent.mkdir(exist_ok=True)
-        DATA_DIR.mkdir(exist_ok=True)
-
+        root = pathlib.Path(".").resolve()
+        build = root / "build"
+        build.mkdir(exist_ok=True)
         if branch:
-            ctngdir = DATA_DIR / "crosstool-ng"
+            ctngdir = build / "crosstool-ng"
             if not ctngdir.exists():
-                os.chdir(DATA_DIR)
-                subprocess.run(["git", "clone", "-b", barnch, CT_GIT_REPO])
+                os.chdir(build)
+                subprocess.run(["git", "clone", "-b", branch, CT_GIT_REPO])
         else:
-            ctngdir = DATA_DIR / f"crosstool-ng-{CT_NG_VER}"
+            ctngdir = build / f"crosstool-ng-{CT_NG_VER}"
             if not ctngdir.exists():
                 url = CT_URL.format(version=CT_NG_VER)
-                archive = download_url(url, DATA_DIR)
-                extract_archive(DATA_DIR, archive)
+                archive = download_url(url, build)
+                extract_archive(build, archive)
 
         os.chdir(ctngdir)
-
         ctng = ctngdir / "ct-ng"
 
         if ctng.exists():
             print(f"Using existing ct-ng: {ctng}")
         else:
-            print(f"Compiling ct-ng: {ctng}")
+            print("Compiling ct-ng")
             runcmd(["./configure", "--enable-local"])
             runcmd(["make"])
-
-        print(f"ct-ng compiled: {ctng}")
+            print(f"Using compiled ct-ng: {ctng}")
 
         arch = build_arch()
         machine = platform.machine()
-        toolchain = MODULE_DIR / "_toolchain"
+        toolchain = root / "src" / "ppt" / "_toolchain"
 
         print(f"toolchain: {toolchain}")
 
         toolchain.mkdir(exist_ok=True)
-        os.chdir(toolchain)
 
         triplet = get_triplet(arch)
         archdir = toolchain / triplet
         print(f"Arch dir is {archdir}")
-
         if archdir.exists():
             print("Toolchain directory exists: {}".format(archdir))
         else:
             config = (
-                MODULE_DIR / "_config" / machine / "{}-ct-ng.config".format(triplet)
+                root
+                / "src"
+                / "ppt"
+                / "_config"
+                / machine
+                / "{}-ct-ng.config".format(triplet)
             )
             if not config.exists():
                 print("Toolchain config missing: {}".format(config))
@@ -263,8 +264,9 @@ def build_ppt(static=False, branch=None):
             os.chdir(ctngdir)
             env = os.environ.copy()
             env["CT_PREFIX"] = toolchain
-            env["CT_ALLOW_BUILD_AS_ROOT"] = "y"
-            env["CT_ALLOW_BUILD_AS_ROOT_SURE"] = "y"
+            if os.getuid() == 0:
+                env["CT_ALLOW_BUILD_AS_ROOT"] = "y"
+                env["CT_ALLOW_BUILD_AS_ROOT_SURE"] = "y"
             if CICD:
                 env["CT_LOG_PROGRESS"] = "n"
             runcmd(
@@ -282,8 +284,17 @@ def build_ppt(static=False, branch=None):
                 env=env,
             )
 
-        os.chdir(toolchain)
+        archive = download_url(PATCHELF_SOURCE, build)
+        extract_archive(build, archive)
+        source = build / f"patchelf-{PATCHELF_VERSION}"
+        os.chdir(source)
+        subprocess.run(["./configure"])
+        subprocess.run(["make"])
+        shutil.copy(
+            source / "src" / "patchelf", toolchain / triplet / "bin" / "patchelf"
+        )
 
+        os.chdir(toolchain)
         archive = f"{ triplet }.tar.xz"
         print(f"Archive is {archive}")
         with tarfile.open(archive, mode="w:xz") as fp:
@@ -297,22 +308,13 @@ def build_ppt(static=False, branch=None):
                     except FileNotFoundError:
                         print(f"File not found while archiving: {relpath}")
 
-        shutil.rmtree(archdir)
     finally:
+        if archdir and archdir.exists():
+            shutil.rmtree(archdir)
         os.chdir(cwd)
 
 
 def build_wheel(wheel_directory, metadata_directory=None, config_settings=None):
     """PEP 517 wheel creation hook."""
-    print("*" * 80)
-    print(config_settings)
-    print("*" * 80)
-    static_build_dir = os.environ.get("PY_STATIC_BUILD_DIR", "")
-    if static_build_dir:
-        print("BUILD STATIC")
-        build_ppt(static_build_dir)
-        return _build_wheel(wheel_directory, metadata_directory, config_settings)
-    else:
-        with tempfile.TemporaryDirectory() as tmp_dist_dir:
-            build_ppt(tmp_dist_dir)
-            return _build_wheel(wheel_directory, metadata_directory, config_settings)
+    build_ppt()
+    return _build_wheel(wheel_directory, metadata_directory, config_settings)
