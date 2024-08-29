@@ -5,3 +5,8 @@ requires = [
 ]
 build-backend = "build"
 backend-path = ["src/ppt"]
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]
