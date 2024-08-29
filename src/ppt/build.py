@@ -4,6 +4,7 @@
 """
 Build a ppt wheel which includes a toolchain archive.
 """
+import hashlib
 import http.client
 import os
 import pathlib
@@ -31,6 +32,11 @@ PATCHELF_SOURCE = (
 
 _build_wheel = build_wheel
 _build_sdist = build_sdist
+
+# def build_sdist(wheel_directory, metadata_directory=None, config_settings=None):
+#    print(sys.argv)
+#    print(f"WTF {wheel_directory}")
+#    print(f"WTF {config_settings}")
 
 
 class BuildError(RuntimeError):
@@ -195,7 +201,7 @@ def runcmd(*args, **kwargs):
     return proc
 
 
-def build_ppt(branch=None):
+def build_ppt(branch=None, use_tempdir=True):
     """Build a toolchain and include it in the wheel.
 
     - Downloads and installs crosstool-ng for building a toolchain.
@@ -203,11 +209,14 @@ def build_ppt(branch=None):
     - Add patchelf to the toolchain's binaries
     - Create a tarball to be included in the wheel
     """
-    cwd = os.getcwd()
+    cwd = pathlib.Path(os.getcwd())
+    root = pathlib.Path(os.environ.get("PWD", os.getcwd()))
+    build = root / "build"
     archdir = None
     try:
-        root = pathlib.Path(".").resolve()
-        build = root / "build"
+        # root = pathlib.Path(__file__).resolve().parent.parent.parent
+        # build = root / "build"
+        print(f"  ** Build dir is: {build}")
         build.mkdir(exist_ok=True)
         if branch:
             ctngdir = build / "crosstool-ng"
@@ -234,14 +243,14 @@ def build_ppt(branch=None):
 
         arch = build_arch()
         machine = platform.machine()
-        toolchain = root / "src" / "ppt" / "_toolchain"
+        toolchain = cwd / "src" / "ppt" / "_toolchain"
 
         print(f"toolchain: {toolchain}")
 
         toolchain.mkdir(exist_ok=True)
 
         triplet = get_triplet(arch)
-        archdir = toolchain / triplet
+        archdir = build / triplet
         print(f"Arch dir is {archdir}")
         if archdir.exists():
             print("Toolchain directory exists: {}".format(archdir))
@@ -263,7 +272,7 @@ def build_ppt(branch=None):
                     wfp.write(rfp.read())
             os.chdir(ctngdir)
             env = os.environ.copy()
-            env["CT_PREFIX"] = toolchain
+            env["CT_PREFIX"] = build
             if os.getuid() == 0:
                 env["CT_ALLOW_BUILD_AS_ROOT"] = "y"
                 env["CT_ALLOW_BUILD_AS_ROOT_SURE"] = "y"
@@ -284,37 +293,61 @@ def build_ppt(branch=None):
                 env=env,
             )
 
-        archive = download_url(PATCHELF_SOURCE, build)
-        extract_archive(build, archive)
         source = build / f"patchelf-{PATCHELF_VERSION}"
-        os.chdir(source)
-        subprocess.run(["./configure"])
-        subprocess.run(["make"])
-        shutil.copy(
-            source / "src" / "patchelf", toolchain / triplet / "bin" / "patchelf"
-        )
+        patchelf = source / "src" / "patchelf"
+        if source.exists():
+            print(f"Using existing patchelf source: {source}")
+        else:
+            print(f"Fetchin patchelf source: {PATCHELF_SOURCE}")
+            archive = download_url(PATCHELF_SOURCE, build)
+            extract_archive(build, archive)
+            os.chdir(source)
 
-        os.chdir(toolchain)
+        if patchelf.exists():
+            print(f"Using existing patchelf binary: {source}")
+        else:
+            print("Build patchelf")
+            subprocess.run(["./configure"])
+            subprocess.run(["make"])
+
+        shutil.copy(source / "src" / "patchelf", build / triplet / "bin" / "patchelf")
+
+        os.chdir(build)
         archive = f"{ triplet }.tar.xz"
+        record = f"{ triplet }.tar.xz.record"
         print(f"Archive is {archive}")
-        with tarfile.open(archive, mode="w:xz") as fp:
-            for root, _dirs, files in os.walk(archdir):
-                relroot = pathlib.Path(root).relative_to(toolchain)
-                for f in files:
-                    relpath = relroot / f
-                    print(f"Adding {relpath}")
-                    try:
-                        fp.add(relpath, relpath, recursive=False)
-                    except FileNotFoundError:
-                        print(f"File not found while archiving: {relpath}")
-
+        with open(record, "w") as rfp:
+            with tarfile.open(archive, mode="w:xz") as fp:
+                for root, _dirs, files in os.walk(archdir):
+                    relroot = pathlib.Path(root).relative_to(build)
+                    for f in files:
+                        relpath = relroot / f
+                        # print(f"Adding {relpath}")
+                        with open(relpath, "rb") as dfp:
+                            # XXX do not read entire file in one swoop
+                            data = dfp.read()
+                            hsh = hashlib.sha256(data).hexdigest()
+                            rfp.write(f"{relpath},sha256={hsh},{len(data)}\n")
+                        try:
+                            fp.add(relpath, relpath, recursive=False)
+                        except FileNotFoundError:
+                            print(f"File not found while archiving: {relpath}")
+        print(f"Copying {archive} to {toolchain}")
+        print(f"Copying {record} to {toolchain}")
+        shutil.copy(archive, toolchain)
+        shutil.copy(record, toolchain)
     finally:
-        if archdir and archdir.exists():
-            shutil.rmtree(archdir)
+        # if archdir and archdir.exists():
+        #    shutil.rmtree(archdir)
         os.chdir(cwd)
 
 
 def build_wheel(wheel_directory, metadata_directory=None, config_settings=None):
     """PEP 517 wheel creation hook."""
+    # import sys
+    # import os
+    # print(os.environ)
+    # print(sys.argv)
+    # print(config_settings)
     build_ppt()
     return _build_wheel(wheel_directory, metadata_directory, config_settings)

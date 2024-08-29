@@ -15,6 +15,10 @@ def plat_name():
     return f"manylinux_{GLIBC_VERSION.replace('.', '_')}_{platform.machine()}"
 
 
+import sys
+
+print(f"WTFSON {sys.argv}")
+
 setup(
     options={
         "bdist_wheel": {

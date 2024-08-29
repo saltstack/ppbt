@@ -5,3 +5,7 @@ dist/
 build/
 *.egg-info
 src/ppt/_toolchain/
+# any venv directories in root
+/venv*
+# vim swap file
+*.swo
