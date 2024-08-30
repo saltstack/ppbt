@@ -33,11 +33,6 @@ PATCHELF_SOURCE = (
 _build_wheel = build_wheel
 _build_sdist = build_sdist
 
-# def build_sdist(wheel_directory, metadata_directory=None, config_settings=None):
-#    print(sys.argv)
-#    print(f"WTF {wheel_directory}")
-#    print(f"WTF {config_settings}")
-
 
 class BuildError(RuntimeError):
     """Generic build error."""
@@ -321,13 +316,15 @@ def build_ppt(branch=None, use_tempdir=True):
                 for root, _dirs, files in os.walk(archdir):
                     relroot = pathlib.Path(root).relative_to(build)
                     for f in files:
+                        print(f"Archive {relroot} / {f}")
                         relpath = relroot / f
                         # print(f"Adding {relpath}")
                         with open(relpath, "rb") as dfp:
                             # XXX do not read entire file in one swoop
                             data = dfp.read()
                             hsh = hashlib.sha256(data).hexdigest()
-                            rfp.write(f"{relpath},sha256={hsh},{len(data)}\n")
+                            hashpath = pathlib.Path("ppt") / "_toolchain" / relpath
+                            rfp.write(f"{hashpath},sha256={hsh},{len(data)}\n")
                         try:
                             fp.add(relpath, relpath, recursive=False)
                         except FileNotFoundError:
@@ -344,10 +341,5 @@ def build_ppt(branch=None, use_tempdir=True):
 
 def build_wheel(wheel_directory, metadata_directory=None, config_settings=None):
     """PEP 517 wheel creation hook."""
-    # import sys
-    # import os
-    # print(os.environ)
-    # print(sys.argv)
-    # print(config_settings)
     build_ppt()
     return _build_wheel(wheel_directory, metadata_directory, config_settings)

@@ -14,7 +14,7 @@ triplet = get_triplet(build_arch())
 
 archive = pathlib.Path(__file__).parent / "_toolchain" / f"{triplet}.tar.xz"
 toolchain = pathlib.Path(__file__).parent / "_toolchain" / triplet
-toolchain_root = pathlib.Path(__file__).parent / "_toolchain" / triplet
+toolchain_root = pathlib.Path(__file__).parent / "_toolchain"
 
 
 distinfo = pathlib.Path(__file__).resolve().parent.parent / "ppt-0.1.0.dist-info"
