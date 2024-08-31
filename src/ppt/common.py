@@ -6,6 +6,7 @@ Toolchain build environment.
 """
 
 import csv
+import logging
 import pathlib
 
 from .build import build_arch, extract_archive, get_triplet
@@ -19,15 +20,17 @@ toolchain_root = pathlib.Path(__file__).parent / "_toolchain"
 
 distinfo = pathlib.Path(__file__).resolve().parent.parent / "ppt-0.1.0.dist-info"
 
+log = logging.getLogger(__name__)
+
 
 def environ():
     """
     Toolchain build environment.
     """
     if toolchain.exists():
-        print("Toolchain directory exists")
+        log.debug("Toolchain directory exists")
     else:
-        print("extract archive")
+        log.info("Extract archive")
         extract_archive(toolchain_root, str(archive))
         record = distinfo / "RECORD"
         if record.exists():
