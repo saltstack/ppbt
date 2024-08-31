@@ -1,0 +1,32 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        required: false
+        type: string
+        default: dev
+      package_command:
+        required: false
+        type: string
+        description: Command used to build python package
+        default: >-
+          python -m
+          build
+          --wheel
+          --outdir dist/
+
+jobs:
+  ci:
+    name: CI
+    permissions:
+      contents: write
+      pull-requests: read
+    uses: ./.github/workflows/ci.yml
+    if: contains('["dwoz", "twangboy", "dmurphy18"]', github.actor)
+    with:
+      kind: "${{ inputs.kind }}"
+      package_command: "${{ inputs.package_command }}"
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}

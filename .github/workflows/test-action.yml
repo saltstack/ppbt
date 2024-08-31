@@ -1,0 +1,49 @@
+name: Unit Tests
+
+on:
+  workflow_call:
+    inputs:
+      changed-files:
+        required: true
+        type: string
+        description: JSON string containing information about changed files
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on:
+          - ubuntu-latest
+          - macos-12
+          - macos-13-xlarge
+          - windows-latest
+
+    name: Unit Test ${{ matrix.runs-on }}
+    runs-on: ${{ matrix.runs-on }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install python dependencies
+        run: |
+          pip3 install nox
+
+      - name: Install Linux dependencies
+        if: ${{ matrix.runs-on == 'linux' }}
+        run: |
+          apt-get install -y shellcheck
+
+      - name: Install Mac dependencies
+        if: ${{ matrix.runs-on == 'macos-12' || matrix.runs-on == 'macos-13-xlarge' }}
+        run: |
+          brew install shellcheck
+
+      - name: Run tests
+        run: |
+          nox -e tests

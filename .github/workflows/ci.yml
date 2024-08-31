@@ -1,0 +1,142 @@
+name: CI
+
+concurrency:
+  # Concurrency is defined in a way that concurrent builds against branches do
+  # not cancel previous builds.
+  # However, for every new build against the same pull request source branch,
+  # all older builds against that same branch get canceled.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.repository }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+on:
+  workflow_call:
+    inputs:
+      kind:
+        required: false
+        type: string
+        default: dev
+      package_command:
+        required: false
+        type: string
+        description: Command used to build python package
+        default: >-
+          python -m
+          build
+          -C--global-option=egg_info
+          -C--global-option=--tag-build=+dev$(git rev-parse --short HEAD)
+          --wheel
+          --outdir dist/
+    secrets:
+      PYPI_API_TOKEN:
+        required: false
+
+jobs:
+
+  get-changed-files:
+    name: Get Changed Files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # for dorny/paths-filter to fetch a list of changed files
+      pull-requests: read  # for dorny/paths-filter to read pull requests
+    outputs:
+      changed-files: ${{ toJSON(steps.changed-files.outputs) }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get Changed Files
+        id: changed-files
+        uses: dorny/paths-filter@v2
+        with:
+          token: ${{ github.token }}
+          list-files: json
+          filters: |
+            repo:
+              - added|modified:
+                - '**'
+            deleted:
+              - deleted:
+                - '**'
+
+  pre-commit:
+    name: Pre-Commit
+    uses: ./.github/workflows/pre-commit-action.yml
+    needs:
+      - get-changed-files
+    with:
+      changed-files: ${{ needs.get-changed-files.outputs.changed-files }}
+
+  build-python-package:
+    name: Python Package
+    uses: ./.github/workflows/package-action.yml
+    if: always()
+    needs:
+      - pre-commit
+    with:
+      kind: "${{ inputs.kind }}"
+      cmd: "${{ inputs.package_command }}"
+
+  test:
+    name: Test
+    needs:
+      - get-changed-files
+    uses: ./.github/workflows/test-action.yml
+    with:
+      changed-files: ${{ needs.get-changed-files.outputs.changed-files }}
+
+  deploy-python-package:
+    name: Deploy Python Package
+    uses: ./.github/workflows/deploy-package-action.yml
+    if: ${{ inputs.kind == 'release' && success() }}
+    needs:
+      - pre-commit
+      - test
+      - build-python-package
+    secrets:
+      PYPI_API_TOKEN: "${{ secrets.PYPI_API_TOKEN }}"
+
+  push-tag:
+    name: Push Version Tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: ${{ inputs.kind == 'release' && success() }}
+    needs:
+      - build-python-package
+      - deploy-python-package
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Push Tag
+        uses: rickstaa/action-create-tag@v1
+        with:
+          tag: "v${{ needs.build-python-package.outputs.version }}"
+          message: "Version ${{ needs.build-python-package.outputs.version }}"
+
+  set-pipeline-exit-status:
+    # This step is just so we can make github require this step, to pass checks
+    # on a pull request instead of requiring all
+    name: Set the CI Pipeline Exit Status
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - pre-commit
+      - test
+      - deploy-python-package
+      - push-tag
+    steps:
+      - name: Get workflow information
+        id: get-workflow-info
+        uses: technote-space/workflow-conclusion-action@v3
+
+      - name: Set Pipeline Exit Status
+        shell: bash
+        run: |
+          if [ "${{ steps.get-workflow-info.outputs.conclusion }}" != "success" ]; then
+            exit 1
+          else
+            exit 0
+          fi
+
+      - name: Done
+        if: always()
+        run:
+          echo "All workflows finished"
