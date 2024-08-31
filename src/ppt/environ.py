@@ -5,7 +5,7 @@
 Toolchain build environment.
 """
 
-
+import csv
 import pathlib
 
 from .build import build_arch, extract_archive, get_triplet
@@ -29,10 +29,25 @@ def environ():
     else:
         print("extract archive")
         extract_archive(toolchain_root, str(archive))
+        record = distinfo / "RECORD"
+        if record.exists():
+            records = []
+            with open(record, "r") as fp:
+                for row in csv.reader(fp):
+                    records.append(row)
+            with open(str(archive) + ".record", "r") as fp:
+                for row in csv.reader(fp):
+                    records.append(row)
+            records = sorted(records, key=lambda _: _[0])
+            with open(record, "w") as fp:
+                writer = csv.writer(fp)
+                for row in records:
+                    writer.writerow(row)
+    basebin = toolchain / "bin" / triplet
     return {
         "TOOLCHAIN_PATH": f"{toolchain}",
-        "CC": f"{toolchain / 'bin' / triplet + '-gcc'}",
-        "CXX": f"{toolchain / 'bin' / triplet + '-g++'}",
+        "CC": f"{basebin}-gcc",
+        "CXX": f"{basebin}-g++",
         "CFLAGS": f"-I{toolchain}/{triplet}/sysroot/usr/include",
         "CPPFLAGS": f"-I{toolchain}/{triplet}/sysroot/usr/include",
         "CMAKE_FLAGS": f"-I{toolchain}/{triplet}/sysroot/usr/include",
