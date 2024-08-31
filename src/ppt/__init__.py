@@ -3,6 +3,6 @@
 """
 Protable toolchains for python
 """
-from environ import environ
+from .common import environ
 
 ALL = ("environ",)
