@@ -4,6 +4,8 @@
 """
 Build a ppt wheel which includes a toolchain archive.
 """
+import base64
+import csv
 import hashlib
 import http.client
 import os
@@ -312,19 +314,22 @@ def build_ppt(branch=None, use_tempdir=True):
         record = f"{ triplet }.tar.xz.record"
         print(f"Archive is {archive}")
         with open(record, "w") as rfp:
-            with tarfile.open(archive, mode="w:xz") as fp:
+            rwriter = csv.writer(rfp)
+            with tarfile.open(archive, mode="w:xz", dereference=True) as fp:
                 for root, _dirs, files in os.walk(archdir):
                     relroot = pathlib.Path(root).relative_to(build)
                     for f in files:
                         print(f"Archive {relroot} / {f}")
                         relpath = relroot / f
-                        # print(f"Adding {relpath}")
                         with open(relpath, "rb") as dfp:
-                            # XXX do not read entire file in one swoop
                             data = dfp.read()
-                            hsh = hashlib.sha256(data).hexdigest()
-                            hashpath = pathlib.Path("ppt") / "_toolchain" / relpath
-                            rfp.write(f"{hashpath},sha256={hsh},{len(data)}\n")
+                            hsh = (
+                                base64.urlsafe_b64encode(hashlib.sha256(data).digest())
+                                .rstrip(b"=")
+                                .decode()
+                            )
+                            hashpath = str(pathlib.Path("ppt") / "_toolchain" / relpath)
+                            rwriter.writerow([hashpath, f"sha256={hsh}", len(data)])
                         try:
                             fp.add(relpath, relpath, recursive=False)
                         except FileNotFoundError:
