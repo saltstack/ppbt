@@ -18,7 +18,7 @@ toolchain = pathlib.Path(__file__).parent / "_toolchain" / triplet
 toolchain_root = pathlib.Path(__file__).parent / "_toolchain"
 
 
-distinfo = pathlib.Path(__file__).resolve().parent.parent / "ppt-0.1.0.dist-info"
+distinfo = pathlib.Path(__file__).resolve().parent.parent / "ppbt-0.1.0.dist-info"
 
 log = logging.getLogger(__name__)
 

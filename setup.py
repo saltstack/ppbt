@@ -7,7 +7,7 @@ from setuptools import Distribution, setup
 
 # If crosstool is updated to a newer version of glibc this should get updated
 # too. Would also be nice to detect this instead.
-# hint: grep CT_GLIBC_VERSION src/ppt/_config/x86_64/x86_64-linux-gnu-ct-ng.config
+# hint: grep CT_GLIBC_VERSION src/ppbt/_config/x86_64/x86_64-linux-gnu-ct-ng.config
 GLIBC_VERSION = "2.17"
 
 
