@@ -23,11 +23,11 @@ distinfo = pathlib.Path(__file__).resolve().parent.parent / "ppbt-0.1.0.dist-inf
 log = logging.getLogger(__name__)
 
 
-def environ():
+def extract(overwrite=False):
     """
-    Toolchain build environment.
+    Extract the toolchain tarball.
     """
-    if toolchain.exists():
+    if toolchain.exists() and not overwrite:
         log.debug("Toolchain directory exists")
     else:
         log.info("Extract archive")
@@ -46,6 +46,17 @@ def environ():
                 writer = csv.writer(fp)
                 for row in records:
                     writer.writerow(row)
+
+
+def environ(auto_extract=False):
+    """
+    Toolchain build environment.
+    """
+    if not toolchain.exists():
+        if auto_extract:
+            extract()
+        else:
+            raise RuntimeError("Toolchain not extracted")
     basebin = toolchain / "bin" / triplet
     return {
         "TOOLCHAIN_PATH": f"{toolchain}",
