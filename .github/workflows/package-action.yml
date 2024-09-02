@@ -28,16 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: debian:11
-#      volumes:
-#       - ${{ github.workspace }}:/src
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
     - uses: actions/checkout@master
-#    - name: Set up Python 3.10
-#      uses: actions/setup-python@v4
-#      with:
-#        python-version: "3.10"
 
     - name: Update Apt
       run: >-
@@ -49,10 +43,6 @@ jobs:
         python3-pip python3-venv flex make
         texinfo unzip help2man gawk libtool-bin libncurses5-dev
         bison wget rsync git
-
-#    - name: Change dir to source directory
-#      run: |
-#        cd /src
 
     - name: Create virtualenv
       run: >-
@@ -85,10 +75,6 @@ jobs:
         name: dist
         path: dist/*
         retention-days: 5
-
-    - name: List dist directory
-      run: |
-        ls -lah dist
 
     - name: Read Version
       run: >-
