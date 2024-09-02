@@ -26,32 +26,47 @@ jobs:
   build:
     name: Build Python Wheel
     runs-on: ubuntu-latest
+    container:
+      image: debian:11
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
     - uses: actions/checkout@master
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.10"
-    - name: Install pypa/build
+
+    - name: Update Apt
       run: >-
-        python -m
-        pip install
-        build
-        --user
-    - name: Install pypa/pkginffo
+        apt-get update
+
+    - name: Install OS Dependencies
       run: >-
-        python -m
-        pip install
-        pkginfo
-        --user
+        apt-get install -y gcc python3
+        python3-pip python3-venv flex make
+        texinfo unzip help2man gawk libtool-bin libncurses5-dev
+        bison wget rsync git
+
+    - name: Create virtualenv
+      run: >-
+        python3 -m venv venv
+
+    - name: Activate virtualenv
+      run: |
+        . venv/bin/activate
+        echo PATH=$PATH >> $GITHUB_ENV
+
+    - name: Python Version
+      run: >-
+        python3 --version
+
+    - name: Install Python Dependencies
+      run: >-
+        pip install build wheel setuptools pkginfo
 
     - name: Echo Build Wheel Command
       run: echo "${{ inputs.cmd }}"
 
     - name: Build Wheel
-      run: "${{ inputs.cmd }}"
+      run: |
+        ${{ inputs.cmd }}
 
     - name: Python Build Artifact
       uses: actions/upload-artifact@v3
@@ -60,11 +75,12 @@ jobs:
         name: dist
         path: dist/*
         retention-days: 5
+
     - name: Read Version
       run: >-
         python3
         -c
-        "from pkginfo import Wheel; s = Wheel('dist/$(ls dist/)'); print(f'version={s.version}')"
+        "from pkginfo import Wheel; s = Wheel('''$(ls dist/*.whl)'''); print('version='+str(s.version))"
         >>
         $GITHUB_OUTPUT
       id: version

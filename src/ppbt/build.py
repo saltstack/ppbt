@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 """
-Build a ppt wheel which includes a toolchain archive.
+Build a ppbt wheel which includes a toolchain archive.
 """
 import base64
 import csv
@@ -198,7 +198,7 @@ def runcmd(*args, **kwargs):
     return proc
 
 
-def build_ppt(branch=None, use_tempdir=True):
+def build_ppbt(branch=None, use_tempdir=True):
     """Build a toolchain and include it in the wheel.
 
     - Downloads and installs crosstool-ng for building a toolchain.
@@ -240,7 +240,7 @@ def build_ppt(branch=None, use_tempdir=True):
 
         arch = build_arch()
         machine = platform.machine()
-        toolchain = cwd / "src" / "ppt" / "_toolchain"
+        toolchain = cwd / "src" / "ppbt" / "_toolchain"
 
         print(f"toolchain: {toolchain}")
 
@@ -255,7 +255,7 @@ def build_ppt(branch=None, use_tempdir=True):
             config = (
                 root
                 / "src"
-                / "ppt"
+                / "ppbt"
                 / "_config"
                 / machine
                 / "{}-ct-ng.config".format(triplet)
@@ -328,7 +328,7 @@ def build_ppt(branch=None, use_tempdir=True):
                                 .rstrip(b"=")
                                 .decode()
                             )
-                            hashpath = str(pathlib.Path("ppt") / "_toolchain" / relpath)
+                            hashpath = str(pathlib.Path("ppbt") / "_toolchain" / relpath)
                             rwriter.writerow([hashpath, f"sha256={hsh}", len(data)])
                         try:
                             fp.add(relpath, relpath, recursive=False)
@@ -346,5 +346,5 @@ def build_ppt(branch=None, use_tempdir=True):
 
 def build_wheel(wheel_directory, metadata_directory=None, config_settings=None):
     """PEP 517 wheel creation hook."""
-    build_ppt()
+    build_ppbt()
     return _build_wheel(wheel_directory, metadata_directory, config_settings)
