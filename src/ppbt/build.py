@@ -328,7 +328,9 @@ def build_ppbt(branch=None, use_tempdir=True):
                                 .rstrip(b"=")
                                 .decode()
                             )
-                            hashpath = str(pathlib.Path("ppbt") / "_toolchain" / relpath)
+                            hashpath = str(
+                                pathlib.Path("ppbt") / "_toolchain" / relpath
+                            )
                             rwriter.writerow([hashpath, f"sha256={hsh}", len(data)])
                         try:
                             fp.add(relpath, relpath, recursive=False)
