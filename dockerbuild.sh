@@ -6,11 +6,10 @@ if [ -n "$UID" ]
 then
   CHOWN=""
 else
-  CHOWN="chown -R $UID dist build src/ppt/_toolchain"
+  CHOWN="chown -R $UID dist build src/ppbt/_toolchain"
 fi
 
 export CHOWN
-export ARGS
 
 CMD="
 apt-get update;
@@ -22,7 +21,7 @@ cd /src
 python3 -m venv venv
 venv/bin/pip install build wheel setuptools
 venv/bin/python3 -m build
-chown -R $UID dist build src/ppt/_toolchain
+$CHOWN
 "
 
 docker run --rm -v $(pwd):/src debian:11 /bin/sh -c "$CMD"
