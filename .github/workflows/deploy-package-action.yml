@@ -1,4 +1,4 @@
-name: Relenv Python Package
+name: ppbt Python Package
 
 on:
   workflow_call:
@@ -11,11 +11,19 @@ jobs:
     name: Publish Python Wheel
     runs-on: ubuntu-latest
     steps:
-    - name: Download Python Package Artifacts
+
+    - name: Download x86 Python Package Artifacts
       uses: actions/download-artifact@v3
       with:
-        name: dist
+        name: dist-x86_64
         path: dist
+
+    - name: Download arm64 Python Package Artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: dist-aarch64
+        path: dist
+
     - name: Publish distribution to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:

@@ -72,8 +72,7 @@ jobs:
       - pre-commit
     with:
       kind: "${{ inputs.kind }}"
-      cmd: python -m build 
-      #cmd: "${{ inputs.package_command }}"
+      cmd: "${{ inputs.package_command }}"
 
   test:
     name: Test
