@@ -72,8 +72,7 @@ jobs:
       - pre-commit
     with:
       kind: "${{ inputs.kind }}"
-      cmd: python -m build 
-      #cmd: "${{ inputs.package_command }}"
+      cmd: "${{ inputs.package_command }}"
 
   test:
     name: Test
@@ -111,6 +110,29 @@ jobs:
         with:
           tag: "v${{ needs.build-python-package.outputs.version }}"
           message: "Version ${{ needs.build-python-package.outputs.version }}"
+
+  create-release:
+    name: Push Version Tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: ${{ inputs.kind == 'release' && success() }}
+    needs:
+      - build-python-package
+      - deploy-python-package
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            Release ${{ needs.build-python-package.outputs.version }}
+          draft: false
+          prerelease: false
 
   set-pipeline-exit-status:
     # This step is just so we can make github require this step, to pass checks
