@@ -3,12 +3,10 @@ name: ppbt Python Package
 on: workflow_call
 
 jobs:
-  build:
+  release:
     name: Publish Python Wheel
     runs-on: ubuntu-latest
     environment: release
-    permissions:
-      id-token: write
     steps:
       - name: Download x86 Python Package Artifacts
         uses: actions/download-artifact@v3
