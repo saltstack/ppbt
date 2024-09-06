@@ -26,9 +26,6 @@ on:
           -C--global-option=--tag-build=+dev$(git rev-parse --short HEAD)
           --wheel
           --outdir dist/
-    secrets:
-      PYPI_API_TOKEN:
-        required: false
 
 jobs:
 
@@ -90,8 +87,6 @@ jobs:
       - pre-commit
       - test
       - build-python-package
-    secrets:
-      PYPI_API_TOKEN: "${{ secrets.PYPI_API_TOKEN }}"
 
   push-tag:
     name: Push Version Tag

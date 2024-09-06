@@ -1,10 +1,6 @@
 name: ppbt Python Package
 
-on:
-  workflow_call:
-    secrets:
-      PYPI_API_TOKEN:
-        required: true
+on: workflow_call
 
 jobs:
   build:
