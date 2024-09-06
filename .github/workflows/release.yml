@@ -20,7 +20,6 @@ on:
 jobs:
   ci:
     name: CI
-    environment: release
     permissions:
       contents: write
       pull-requests: read
