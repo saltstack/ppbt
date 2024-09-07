@@ -22,6 +22,8 @@ jobs:
           sudo apt-get install -y git gcc make zlib1g-dev libc-dev libffi-dev g++ libxml2 libxml2-dev libxslt-dev libcurl4-openssl-dev libssl-dev libgnutls28-dev
 
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Pre-Commit
         run: |
@@ -37,4 +39,4 @@ jobs:
       - name: Check Changed Files On PR
         if: github.event_name == 'pull_request' && fromJSON(inputs.changed-files)['repo'] == 'true'
         run: |
-          pre-commit run --show-diff-on-failure --color=always --files ${{ join(fromJSON(inputs.changed-files)['repo_files'], ' ') }}
+          pre-commit run --show-diff-on-failure --color=always --from-ref ${{ github.event.pull_request.base.sha }} --to-ref ${{ github.event.pull_request.head.sha }}
