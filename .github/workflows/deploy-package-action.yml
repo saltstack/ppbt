@@ -8,16 +8,22 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     steps:
+      - name: Download Source Tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: Source Tarball
+          path: dist
+
       - name: Download x86 Python Package Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist-x86_64
+          name: Python Wheel x86_64
           path: dist
 
       - name: Download arm64 Python Package Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist-aarch64
+          name: Python Wheel aarch64
           path: dist
 
       - name: List dist directory
