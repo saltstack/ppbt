@@ -35,12 +35,12 @@ jobs:
         run: |
           python3 -m build -s
 
-    - name: Python Build Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Source Tarball
-        path: dist/*
-        retention-days: 5
+      - name: Python Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Source Tarball
+          path: dist/*
+          retention-days: 5
 
   build:
     name: Build Python Wheel
