@@ -1,7 +1,8 @@
 [build-system]
 requires = [
-    "setuptools",
-    "wheel",
+    "setuptools>=38.6.0",
+    "wheel>=0.31.0",
+    "twine>=1.11.0"
 ]
 build-backend = "build"
 backend-path = ["src/ppbt"]
