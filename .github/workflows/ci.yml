@@ -99,7 +99,7 @@ jobs:
           message: "Version ${{ needs.build-python-package.outputs.version }}"
 
   create-release:
-    name: Push Version Tag
+    name: Create Github Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
