@@ -135,7 +135,7 @@ jobs:
     steps:
       - name: Get workflow information
         id: get-workflow-info
-        uses: technote-space/workflow-conclusion-action@v3
+        uses: technote-space/workflow-conclusion-action@v4
 
       - name: Set Pipeline Exit Status
         shell: bash
