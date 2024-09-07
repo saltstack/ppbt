@@ -53,15 +53,6 @@ jobs:
     with:
       changed-files: ${{ needs.get-changed-files.outputs.changed-files }}
 
-  build-python-package:
-    name: Python Package
-    uses: ./.github/workflows/package-action.yml
-    if: always()
-    needs:
-      - pre-commit
-    with:
-      kind: "${{ inputs.kind }}"
-      cmd: "${{ inputs.package_command }}"
 
   test:
     name: Test
@@ -71,6 +62,16 @@ jobs:
     with:
       changed-files: ${{ needs.get-changed-files.outputs.changed-files }}
 
+  build-python-package:
+    name: Python Package
+    uses: ./.github/workflows/package-action.yml
+    needs:
+      - pre-commit
+      - test
+    with:
+      kind: "${{ inputs.kind }}"
+      cmd: "${{ inputs.package_command }}"
+
   deploy-python-package:
     name: Deploy Python Package
     uses: ./.github/workflows/deploy-package-action.yml
@@ -79,24 +80,6 @@ jobs:
       - pre-commit
       - test
       - build-python-package
-
-  push-tag:
-    name: Push Version Tag
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    if: ${{ inputs.kind == 'release' && success() }}
-    needs:
-      - build-python-package
-      - deploy-python-package
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Push Tag
-        uses: rickstaa/action-create-tag@v1
-        with:
-          tag: "v${{ needs.build-python-package.outputs.version }}"
-          message: "Version ${{ needs.build-python-package.outputs.version }}"
 
   create-release:
     name: Create Github Release
@@ -131,7 +114,7 @@ jobs:
       - pre-commit
       - test
       - deploy-python-package
-      - push-tag
+      - create-release
     steps:
       - name: Get workflow information
         id: get-workflow-info

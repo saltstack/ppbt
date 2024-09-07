@@ -206,7 +206,6 @@ def build_ppbt(branch=None, use_tempdir=True):
     - Add patchelf to the toolchain's binaries
     - Create a tarball to be included in the wheel
     """
-    return
     cwd = pathlib.Path(os.getcwd())
     root = pathlib.Path(os.environ.get("PWD", os.getcwd()))
     build = root / "build"
