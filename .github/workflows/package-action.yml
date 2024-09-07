@@ -24,7 +24,7 @@ on:
 
 jobs:
   build-source:
-    name: Build Python Wheel
+    name: Build Python Source Tarball
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
