@@ -20,9 +20,13 @@ jobs:
           name: dist-aarch64
           path: dist
 
+      - name: List dist directory
+        run: ls -la dist/
+
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          verbose: true
           print-hash: true
           skip-existing: true
           verify-metadata: true
