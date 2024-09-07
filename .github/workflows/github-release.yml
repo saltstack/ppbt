@@ -1,0 +1,77 @@
+name: Create Github Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Publish Python Wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Source Tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: Source Tarball
+          path: dist
+
+      - name: Download x86 Python Package Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Python Wheel x86_64
+          path: dist
+
+      - name: Download arm64 Python Package Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Python Wheel aarch64
+          path: dist
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: "v${{ inputs.version }}"
+          release_name: "Release v${{ inputs.version }}"
+          body: |
+            Release ${{ needs.build-python-package.outputs.version }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Source Tarball
+        id: upload-release-asset-source
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: dist/ppbt-${{ inputs.version }}.tar.gz
+          asset_name: ppbt-${{ inputs.version }}.tar.gz
+          asset_content_type: application/tar+gzip
+
+      - name: Upload x86-64 Wheel
+        id: upload-release-asset-x86_64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: dist/ppbt-${{ inputs.version }}-py3-none-manylinux_2_17_x86_64.whl
+          asset_name: ppbt-${{ inputs.version }}-py3-none-manylinux_2_17_x86_64.whl
+          asset_content_type: application/zip
+
+      - name: Upload arm64 Wheel
+        id: upload-release-asset-aarch64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: dist/ppbt-${{ inputs.version }}-py3-none-manylinux_2_17_aarch64.whl
+          asset_name: ppbt-${{ inputs.version }}-py3-none-manylinux_2_17_aarch64.whl
+          asset_content_type: application/zip

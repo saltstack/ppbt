@@ -90,9 +90,6 @@ jobs:
       run: >-
         pip install build wheel setuptools pkginfo
 
-    - name: Echo Build Wheel Command
-      run: echo "${{ inputs.cmd }}"
-
     - name: Build Wheel
       run: |
         ${{ inputs.cmd }}
