@@ -30,10 +30,10 @@ jobs:
     outputs:
       changed-files: ${{ toJSON(steps.changed-files.outputs) }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Get Changed Files
         id: changed-files
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         with:
           token: ${{ github.token }}
           list-files: json
@@ -91,7 +91,7 @@ jobs:
       - deploy-python-package
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Push Tag
         uses: rickstaa/action-create-tag@v1
         with:
