@@ -5,4 +5,6 @@ Portable Python Build Toolchains.
 """
 from .common import environ, extract
 
+__version__ = "0.1.1"
+
 ALL = ("environ", "extract")
