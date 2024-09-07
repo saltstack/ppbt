@@ -27,6 +27,7 @@ jobs:
     name: Build Python Wheel
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@master
       - name: Install build
         run: |
           python -m pip install --upgrade pip
