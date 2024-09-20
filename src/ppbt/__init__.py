@@ -3,8 +3,6 @@
 """
 Portable Python Build Toolchains.
 """
-from .common import environ, extract
-
-__version__ = "0.1.6"
+from .common import __version__, environ, extract
 
 ALL = ("environ", "extract")

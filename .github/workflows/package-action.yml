@@ -1,4 +1,4 @@
-name: Relenv Python Package
+name: Build ppbt python package
 
 on:
   workflow_call:
