@@ -11,14 +11,18 @@ import pathlib
 
 from .build import build_arch, extract_archive, get_triplet
 
+__version__ = "0.1.7"
+
 triplet = get_triplet(build_arch())
 
 archive = pathlib.Path(__file__).parent / "_toolchain" / f"{triplet}.tar.xz"
 toolchain = pathlib.Path(__file__).parent / "_toolchain" / triplet
 toolchain_root = pathlib.Path(__file__).parent / "_toolchain"
 
-
-distinfo = pathlib.Path(__file__).resolve().parent.parent / "ppbt-0.1.0.dist-info"
+# This is not reliable, the version can be modified by setuptools at build time.
+distinfo = (
+    pathlib.Path(__file__).resolve().parent.parent / f"ppbt-{__version__}.dist-info"
+)
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +39,7 @@ def extract(overwrite=False):
         record = distinfo / "RECORD"
         if record.exists():
             records = []
+            log.info("Update pkg metadata")
             with open(record, "r") as fp:
                 for row in csv.reader(fp):
                     records.append(row)

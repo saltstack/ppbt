@@ -24,7 +24,6 @@ from setuptools.build_meta import build_sdist, build_wheel
 CT_NG_VER = "1.26.0"
 CT_URL = "http://crosstool-ng.org/download/crosstool-ng/crosstool-ng-{version}.tar.bz2"
 CT_GIT_REPO = "https://github.com/crosstool-ng/crosstool-ng.git"
-TC_URL = "https://{hostname}/relenv/{version}/toolchain/{host}/{triplet}.tar.xz"
 CICD = "CI" in os.environ
 PATCHELF_VERSION = "0.18.0"
 PATCHELF_SOURCE = (
@@ -308,37 +307,32 @@ def build_ppbt(branch=None, use_tempdir=True):
             subprocess.run(["make"])
 
         shutil.copy(source / "src" / "patchelf", build / triplet / "bin" / "patchelf")
-
         os.chdir(build)
         archive = f"{ triplet }.tar.xz"
         record = f"{ triplet }.tar.xz.record"
-        print(f"Archive is {archive}")
+        cmd = ["tar", "-C", f"{ build }", "-cJf", f"{ archive }", f"{ triplet }"]
+        subprocess.run(cmd)
+
+        # XXX: Figure out why things break when using the tarfile module.
         with open(record, "w") as rfp:
             rwriter = csv.writer(rfp)
-            with tarfile.open(archive, mode="w:xz", dereference=True) as fp:
-                for root, _dirs, files in os.walk(archdir):
-                    relroot = pathlib.Path(root).relative_to(build)
-                    for f in files:
-                        print(f"Archive {relroot} / {f}")
-                        relpath = relroot / f
-                        with open(relpath, "rb") as dfp:
-                            data = dfp.read()
-                            hsh = (
-                                base64.urlsafe_b64encode(hashlib.sha256(data).digest())
-                                .rstrip(b"=")
-                                .decode()
-                            )
-                            hashpath = str(
-                                pathlib.Path("ppbt") / "_toolchain" / relpath
-                            )
-                            rwriter.writerow([hashpath, f"sha256={hsh}", len(data)])
-                        try:
-                            fp.add(relpath, relpath, recursive=False)
-                        except FileNotFoundError:
-                            print(f"File not found while archiving: {relpath}")
+            for root, _dirs, files in os.walk(archdir):
+                relroot = pathlib.Path(root).relative_to(build)
+                for f in files:
+                    print(f"Archive {relroot} / {f}")
+                    relpath = relroot / f
+                    with open(relpath, "rb") as fp:
+                        data = fp.read()
+                        hsh = (
+                            base64.urlsafe_b64encode(hashlib.sha256(data).digest())
+                            .rstrip(b"=")
+                            .decode()
+                        )
+                        hashpath = str(pathlib.Path("ppbt") / "_toolchain" / relpath)
+                        rwriter.writerow([hashpath, f"sha256={hsh}", len(data)])
         print(f"Copying {archive} to {toolchain}")
-        print(f"Copying {record} to {toolchain}")
         shutil.copy(archive, toolchain)
+        print(f"Copying {record} to {toolchain}")
         shutil.copy(record, toolchain)
     finally:
         # if archdir and archdir.exists():

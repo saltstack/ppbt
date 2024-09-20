@@ -1,3 +1,8 @@
+0.1.7
+=====
+- Use tar instead of tarfile to create toolchain tarballs
+
+
 0.1.6
 =====
 
