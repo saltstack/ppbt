@@ -9,7 +9,7 @@ on:
 
 jobs:
   release:
-    name: Publish Python Wheel
+    name: Create Github Release
     runs-on: ubuntu-latest
     steps:
       - name: Download Source Tarball
