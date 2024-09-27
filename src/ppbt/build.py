@@ -14,12 +14,13 @@ import platform
 import shutil
 import subprocess
 import sys
-import tarfile
 import time
 import urllib.error
 import urllib.request
 
 from setuptools.build_meta import build_sdist, build_wheel
+
+import ppbt.common
 
 CT_NG_VER = "1.26.0"
 CT_URL = "http://crosstool-ng.org/download/crosstool-ng/crosstool-ng-{version}.tar.bz2"
@@ -35,67 +36,8 @@ _build_wheel = build_wheel
 _build_sdist = build_sdist
 
 
-class BuildError(RuntimeError):
+class BuildError(ppbt.common.PPBTException, RuntimeError):
     """Generic build error."""
-
-
-def build_arch():
-    """
-    Return the current machine.
-    """
-    machine = platform.machine()
-    return machine.lower()
-
-
-def get_triplet(machine=None, plat=None):
-    """
-    Get the target triplet for the specified machine and platform.
-
-    If any of the args are None, it will try to deduce what they should be.
-
-    :param machine: The machine for the triplet
-    :type machine: str
-    :param plat: The platform for the triplet
-    :type plat: str
-
-    :raises BuildError: If the platform is unknown
-
-    :return: The target triplet
-    :rtype: str
-    """
-    if not plat:
-        plat = sys.platform
-    if not machine:
-        machine = build_arch()
-    if plat == "darwin":
-        return f"{machine}-macos"
-    elif plat == "win32":
-        return f"{machine}-win"
-    elif plat == "linux":
-        return f"{machine}-linux-gnu"
-    else:
-        raise BuildError(f"Unknown platform {plat}")
-
-
-def extract_archive(to_dir, archive):
-    """
-    Extract an archive to a specific location.
-
-    :param to_dir: The directory to extract to
-    :type to_dir: str
-    :param archive: The archive to extract
-    :type archive: str
-    """
-    if archive.endswith("tgz"):
-        read_type = "r:gz"
-    elif archive.endswith("xz"):
-        read_type = "r:xz"
-    elif archive.endswith("bz2"):
-        read_type = "r:bz2"
-    else:
-        read_type = "r"
-    with tarfile.open(archive, read_type) as t:
-        t.extractall(to_dir)
 
 
 def get_download_location(url, dest):
@@ -224,7 +166,7 @@ def build_ppbt(branch=None, use_tempdir=True):
             if not ctngdir.exists():
                 url = CT_URL.format(version=CT_NG_VER)
                 archive = download_url(url, build)
-                extract_archive(build, archive)
+                ppbt.common.extract_archive(build, archive)
 
         os.chdir(ctngdir)
         ctng = ctngdir / "ct-ng"
@@ -237,7 +179,7 @@ def build_ppbt(branch=None, use_tempdir=True):
             runcmd(["make"])
             print(f"Using compiled ct-ng: {ctng}")
 
-        arch = build_arch()
+        arch = ppbt.common.build_arch()
         machine = platform.machine()
         toolchain = cwd / "src" / "ppbt" / "_toolchain"
 
@@ -245,7 +187,7 @@ def build_ppbt(branch=None, use_tempdir=True):
 
         toolchain.mkdir(exist_ok=True)
 
-        triplet = get_triplet(arch)
+        triplet = ppbt.common.get_triplet(arch)
         archdir = build / triplet
         print(f"Arch dir is {archdir}")
         if archdir.exists():
@@ -296,7 +238,7 @@ def build_ppbt(branch=None, use_tempdir=True):
         else:
             print(f"Fetchin patchelf source: {PATCHELF_SOURCE}")
             archive = download_url(PATCHELF_SOURCE, build)
-            extract_archive(build, archive)
+            ppbt.common.extract_archive(build, archive)
             os.chdir(source)
 
         if patchelf.exists():
