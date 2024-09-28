@@ -1,3 +1,8 @@
+0.1.8
+=====
+- Refactor to support early import of ppbt.common at relenv runtime.
+
+
 0.1.7
 =====
 - Use tar instead of tarfile to create toolchain tarballs
