@@ -32,3 +32,9 @@ jobs:
           print-hash: true
           skip-existing: true
           verify-metadata: true
+          # Reusable-workflow footgun: the sigstore attestation cert
+          # names the entry-point workflow (release.yml), but the
+          # trusted-publisher configs on PyPI name this file.  Disable
+          # PEP 740 attestations until the publisher configs are
+          # repointed at release.yml.
+          attestations: false
