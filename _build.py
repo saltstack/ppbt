@@ -29,14 +29,13 @@ import time
 import urllib.error
 import urllib.request
 
-from setuptools.build_meta import (
-    build_editable as _build_editable_passthrough,
-    build_sdist,
-    build_wheel,
-    get_requires_for_build_sdist,
-    get_requires_for_build_wheel,
-    prepare_metadata_for_build_wheel,
-)
+from setuptools import build_meta as _st_build_meta
+
+build_sdist = _st_build_meta.build_sdist
+build_wheel = _st_build_meta.build_wheel
+get_requires_for_build_sdist = _st_build_meta.get_requires_for_build_sdist
+get_requires_for_build_wheel = _st_build_meta.get_requires_for_build_wheel
+prepare_metadata_for_build_wheel = _st_build_meta.prepare_metadata_for_build_wheel
 
 CT_NG_VER = "1.26.0"
 CT_URL = "http://crosstool-ng.org/download/crosstool-ng/crosstool-ng-{version}.tar.bz2"
@@ -249,7 +248,7 @@ def build_wheel(wheel_directory, metadata_directory=None, config_settings=None):
 
 def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
     """PEP 660 editable hook: skip the toolchain build for dev installs."""
-    return _build_editable_passthrough(
+    return _st_build_meta.build_editable(
         wheel_directory, config_settings, metadata_directory
     )
 
