@@ -75,9 +75,7 @@ def fake_cross(tmp_path, monkeypatch):
     module_name = "_ppbt_fake_cross_provider"
     mod = _make_fake_provider(tmp_path, triplet, module_name)
     eps = [_FakeEntryPoint(triplet, mod)]
-    monkeypatch.setattr(
-        ppbt.common.metadata, "entry_points", lambda group=None: eps
-    )
+    monkeypatch.setattr(ppbt.common.metadata, "entry_points", lambda group=None: eps)
     yield triplet, mod
     sys.modules.pop(module_name, None)
 
@@ -104,9 +102,7 @@ def test_available_triplets_includes_cross_when_archive_present(fake_cross):
 
 def test_archive_for_unknown_triplet_falls_back_to_base_path(monkeypatch):
     """Unknown triplet falls back to a predictable base-package path."""
-    monkeypatch.setattr(
-        ppbt.common.metadata, "entry_points", lambda group=None: []
-    )
+    monkeypatch.setattr(ppbt.common.metadata, "entry_points", lambda group=None: [])
     path = ppbt.common.archive_for("mips64-linux-gnu")
     assert path.parent == ppbt.common.TOOLCHAIN_ROOT
     assert path.name == "mips64-linux-gnu.tar.xz"
@@ -114,9 +110,7 @@ def test_archive_for_unknown_triplet_falls_back_to_base_path(monkeypatch):
 
 def test_extract_without_provider_raises(monkeypatch):
     """``extract`` on an unregistered triplet gives a helpful error."""
-    monkeypatch.setattr(
-        ppbt.common.metadata, "entry_points", lambda group=None: []
-    )
+    monkeypatch.setattr(ppbt.common.metadata, "entry_points", lambda group=None: [])
     with pytest.raises(ppbt.common.PPBTException) as exc:
         ppbt.common.extract(triplet="mips64-linux-gnu")
     assert "mips64-linux-gnu" in str(exc.value)
@@ -125,9 +119,7 @@ def test_extract_without_provider_raises(monkeypatch):
 
 def test_environ_without_provider_raises(monkeypatch):
     """``environ`` on an unregistered triplet gives a helpful error."""
-    monkeypatch.setattr(
-        ppbt.common.metadata, "entry_points", lambda group=None: []
-    )
+    monkeypatch.setattr(ppbt.common.metadata, "entry_points", lambda group=None: [])
     with pytest.raises(ppbt.common.PPBTException):
         ppbt.common.environ(triplet="mips64-linux-gnu")
 
@@ -142,7 +134,7 @@ def test_environ_defaults_to_host(tmp_path, monkeypatch):
     monkeypatch.setattr(ppbt.common, "TOOLCHAIN", fake_toolchain)
     env = ppbt.common.environ()
     assert pathlib.Path(env["TOOLCHAIN_PATH"]) == fake_toolchain
-    assert env["CC"].endswith(f"bin/{ppbt.common.TRIPLET}-gcc")
+    assert pathlib.PurePath(env["CC"]).name == f"{ppbt.common.TRIPLET}-gcc"
 
 
 def test_environ_accepts_triplet(fake_cross):
@@ -151,4 +143,4 @@ def test_environ_accepts_triplet(fake_cross):
     (mod.TOOLCHAIN / "bin").mkdir(parents=True)
     env = ppbt.common.environ(triplet=triplet)
     assert pathlib.Path(env["TOOLCHAIN_PATH"]) == mod.TOOLCHAIN
-    assert env["CC"].endswith(f"bin/{triplet}-gcc")
+    assert pathlib.PurePath(env["CC"]).name == f"{triplet}-gcc"

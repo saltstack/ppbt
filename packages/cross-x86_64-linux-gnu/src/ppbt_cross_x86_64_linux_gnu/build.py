@@ -23,8 +23,8 @@ import time
 import urllib.error
 import urllib.request
 
+from setuptools.build_meta import build_editable as _build_editable_passthrough
 from setuptools.build_meta import (
-    build_editable as _build_editable_passthrough,
     build_sdist,
     build_wheel,
     get_requires_for_build_sdist,
@@ -197,9 +197,7 @@ def build_toolchain():
         os.chdir(build)
         archive = f"{TRIPLET}.tar.xz"
         record = f"{TRIPLET}.tar.xz.record"
-        subprocess.run(
-            ["tar", "-C", str(build), "-cJf", archive, TRIPLET], check=True
-        )
+        subprocess.run(["tar", "-C", str(build), "-cJf", archive, TRIPLET], check=True)
         with open(record, "w") as rfp:
             rwriter = csv.writer(rfp)
             for walk_root, _dirs, files in os.walk(archdir):
