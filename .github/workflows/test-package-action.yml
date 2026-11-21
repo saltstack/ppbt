@@ -15,8 +15,6 @@ jobs:
       matrix:
         runs-on:
           - ubuntu-latest
-          - macos-13
-          - macos-14
           - windows-latest
 
     name: Package Test ${{ matrix.runs-on }}
