@@ -3,6 +3,19 @@
 """
 Portable Python Build Toolchains.
 """
-from .common import __version__, environ, extract
+from .common import (
+    __version__,
+    archive_for,
+    available_triplets,
+    environ,
+    extract,
+    toolchain_for,
+)
 
-ALL = ("environ", "extract")
+ALL = (
+    "environ",
+    "extract",
+    "archive_for",
+    "toolchain_for",
+    "available_triplets",
+)

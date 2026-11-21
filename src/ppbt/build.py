@@ -139,143 +139,171 @@ def runcmd(*args, **kwargs):
     return proc
 
 
-def build_ppbt(branch=None, use_tempdir=True):
-    """Build a toolchain and include it in the wheel.
+def _prepare_crosstool_ng(build, branch=None):
+    """Download/clone and compile crosstool-ng in ``build`` once per invocation.
 
-    - Downloads and installs crosstool-ng for building a toolchain.
-    - Compile a toolchain
-    - Add patchelf to the toolchain's binaries
-    - Create a tarball to be included in the wheel
+    Returns the path to the built ``ct-ng`` driver script.  Idempotent:
+    if the source tree + driver already exist they're reused.
+    """
+    if branch:
+        ctngdir = build / "crosstool-ng"
+        if not ctngdir.exists():
+            os.chdir(build)
+            subprocess.run(["git", "clone", "-b", branch, CT_GIT_REPO])
+    else:
+        ctngdir = build / f"crosstool-ng-{CT_NG_VER}"
+        if not ctngdir.exists():
+            url = CT_URL.format(version=CT_NG_VER)
+            archive = download_url(url, build)
+            ppbt.common.extract_archive(build, archive)
+
+    os.chdir(ctngdir)
+    ctng = ctngdir / "ct-ng"
+
+    if ctng.exists():
+        print(f"Using existing ct-ng: {ctng}")
+    else:
+        print("Compiling ct-ng")
+        runcmd(["./configure", "--enable-local"])
+        runcmd(["make"])
+        print(f"Using compiled ct-ng: {ctng}")
+
+    return ctngdir, ctng
+
+
+def _prepare_patchelf(build):
+    """Download+build patchelf once per invocation.  Returns the binary path."""
+    source = build / f"patchelf-{PATCHELF_VERSION}"
+    patchelf = source / "src" / "patchelf"
+    if source.exists():
+        print(f"Using existing patchelf source: {source}")
+    else:
+        print(f"Fetching patchelf source: {PATCHELF_SOURCE}")
+        archive = download_url(PATCHELF_SOURCE, build)
+        ppbt.common.extract_archive(build, archive)
+        os.chdir(source)
+
+    if patchelf.exists():
+        print(f"Using existing patchelf binary: {source}")
+    else:
+        print("Building patchelf")
+        os.chdir(source)
+        subprocess.run(["./configure"])
+        subprocess.run(["make"])
+
+    return patchelf
+
+
+def _build_one_toolchain(
+    build, ctngdir, ctng, patchelf, config, triplet, toolchain_dir
+):
+    """Build a single toolchain described by ``config`` and stage the tarball.
+
+    ``config`` is the path to a crosstool-ng ``.config`` file.  ``triplet`` is
+    the target triplet encoded by that config (e.g. ``aarch64-linux-gnu``).
+    ``toolchain_dir`` is where the final ``<triplet>.tar.xz`` + ``.record``
+    pair should be copied (the wheel's ``_toolchain`` dir).
+    """
+    archdir = build / triplet
+    print(f"Arch dir is {archdir}")
+    if archdir.exists():
+        print(f"Toolchain directory exists: {archdir}")
+    else:
+        with open(config, "r") as rfp:
+            print(f"Writing crosstool-ng .config for {triplet}")
+            with open(ctngdir / ".config", "w") as wfp:
+                wfp.write(rfp.read())
+        os.chdir(ctngdir)
+        env = os.environ.copy()
+        env["CT_PREFIX"] = str(build)
+        if os.getuid() == 0:
+            env["CT_ALLOW_BUILD_AS_ROOT"] = "y"
+            env["CT_ALLOW_BUILD_AS_ROOT_SURE"] = "y"
+        if CICD:
+            env["CT_LOG_PROGRESS"] = "n"
+        runcmd([str(ctng), "source"], env=env)
+        runcmd([str(ctng), "build"], env=env)
+
+    shutil.copy(patchelf, build / triplet / "bin" / "patchelf")
+    os.chdir(build)
+    archive = f"{triplet}.tar.xz"
+    record = f"{triplet}.tar.xz.record"
+    cmd = ["tar", "-C", f"{build}", "-cJf", f"{archive}", f"{triplet}"]
+    subprocess.run(cmd)
+
+    # XXX: Figure out why things break when using the tarfile module.
+    with open(record, "w") as rfp:
+        rwriter = csv.writer(rfp)
+        for walk_root, _dirs, files in os.walk(archdir):
+            relroot = pathlib.Path(walk_root).relative_to(build)
+            for f in files:
+                print(f"Archive {relroot} / {f}")
+                relpath = relroot / f
+                with open(relpath, "rb") as fp:
+                    data = fp.read()
+                    hsh = (
+                        base64.urlsafe_b64encode(hashlib.sha256(data).digest())
+                        .rstrip(b"=")
+                        .decode()
+                    )
+                    hashpath = str(pathlib.Path("ppbt") / "_toolchain" / relpath)
+                    rwriter.writerow([hashpath, f"sha256={hsh}", len(data)])
+    print(f"Copying {archive} to {toolchain_dir}")
+    shutil.copy(archive, toolchain_dir)
+    print(f"Copying {record} to {toolchain_dir}")
+    shutil.copy(record, toolchain_dir)
+
+
+def build_ppbt(branch=None, use_tempdir=True):
+    """Build toolchains and include them in the wheel.
+
+    For the current host architecture, iterate every ``<triplet>-ct-ng.config``
+    under ``src/ppbt/_config/<host-machine>/`` and build each one.  A
+    single-arch host directory produces a native-only toolchain (the
+    pre-existing behaviour); hosts that also carry a cross config -- e.g.
+    ``x86_64`` carrying ``aarch64-linux-gnu-ct-ng.config`` -- additionally
+    produce a cross toolchain so downstream consumers (relenv) can cross-
+    compile without having to build the toolchain themselves.
+
+    - Downloads and installs crosstool-ng once.
+    - Compiles each configured toolchain in sequence.
+    - Adds patchelf to each toolchain's ``bin/``.
+    - Writes one ``<triplet>.tar.xz`` + ``.record`` pair per toolchain into
+      ``src/ppbt/_toolchain/``.
     """
     cwd = pathlib.Path(os.getcwd())
     root = pathlib.Path(os.environ.get("PWD", os.getcwd()))
     build = root / "build"
-    archdir = None
     try:
-        # root = pathlib.Path(__file__).resolve().parent.parent.parent
-        # build = root / "build"
         print(f"  ** Build dir is: {build}")
         build.mkdir(exist_ok=True)
-        if branch:
-            ctngdir = build / "crosstool-ng"
-            if not ctngdir.exists():
-                os.chdir(build)
-                subprocess.run(["git", "clone", "-b", branch, CT_GIT_REPO])
-        else:
-            ctngdir = build / f"crosstool-ng-{CT_NG_VER}"
-            if not ctngdir.exists():
-                url = CT_URL.format(version=CT_NG_VER)
-                archive = download_url(url, build)
-                ppbt.common.extract_archive(build, archive)
 
-        os.chdir(ctngdir)
-        ctng = ctngdir / "ct-ng"
+        ctngdir, ctng = _prepare_crosstool_ng(build, branch=branch)
 
-        if ctng.exists():
-            print(f"Using existing ct-ng: {ctng}")
-        else:
-            print("Compiling ct-ng")
-            runcmd(["./configure", "--enable-local"])
-            runcmd(["make"])
-            print(f"Using compiled ct-ng: {ctng}")
-
-        arch = ppbt.common.build_arch()
         machine = platform.machine()
         toolchain = cwd / "src" / "ppbt" / "_toolchain"
-
         print(f"toolchain: {toolchain}")
-
         toolchain.mkdir(exist_ok=True)
 
-        triplet = ppbt.common.get_triplet(arch)
-        archdir = build / triplet
-        print(f"Arch dir is {archdir}")
-        if archdir.exists():
-            print("Toolchain directory exists: {}".format(archdir))
-        else:
-            config = (
-                root
-                / "src"
-                / "ppbt"
-                / "_config"
-                / machine
-                / "{}-ct-ng.config".format(triplet)
+        config_dir = root / "src" / "ppbt" / "_config" / machine
+        if not config_dir.exists():
+            print(f"No ct-ng configs for host {machine}: {config_dir}")
+            sys.exit(1)
+
+        configs = sorted(config_dir.glob("*-ct-ng.config"))
+        if not configs:
+            print(f"Toolchain config missing under {config_dir}")
+            sys.exit(1)
+
+        patchelf = _prepare_patchelf(build)
+
+        for config in configs:
+            # ``<triplet>-ct-ng.config`` -> ``<triplet>``
+            triplet = config.name[: -len("-ct-ng.config")]
+            print(f"\n==== Building toolchain for {triplet} ====")
+            _build_one_toolchain(
+                build, ctngdir, ctng, patchelf, config, triplet, toolchain
             )
-            if not config.exists():
-                print("Toolchain config missing: {}".format(config))
-                sys.exit(1)
-            with open(config, "r") as rfp:
-                print("Writing crosstool-ng .config")
-                with open(ctngdir / ".config", "w") as wfp:
-                    wfp.write(rfp.read())
-            os.chdir(ctngdir)
-            env = os.environ.copy()
-            env["CT_PREFIX"] = build
-            if os.getuid() == 0:
-                env["CT_ALLOW_BUILD_AS_ROOT"] = "y"
-                env["CT_ALLOW_BUILD_AS_ROOT_SURE"] = "y"
-            if CICD:
-                env["CT_LOG_PROGRESS"] = "n"
-            runcmd(
-                [
-                    str(ctng),
-                    "source",
-                ],
-                env=env,
-            )
-            runcmd(
-                [
-                    str(ctng),
-                    "build",
-                ],
-                env=env,
-            )
-
-        source = build / f"patchelf-{PATCHELF_VERSION}"
-        patchelf = source / "src" / "patchelf"
-        if source.exists():
-            print(f"Using existing patchelf source: {source}")
-        else:
-            print(f"Fetchin patchelf source: {PATCHELF_SOURCE}")
-            archive = download_url(PATCHELF_SOURCE, build)
-            ppbt.common.extract_archive(build, archive)
-            os.chdir(source)
-
-        if patchelf.exists():
-            print(f"Using existing patchelf binary: {source}")
-        else:
-            print("Build patchelf")
-            subprocess.run(["./configure"])
-            subprocess.run(["make"])
-
-        shutil.copy(source / "src" / "patchelf", build / triplet / "bin" / "patchelf")
-        os.chdir(build)
-        archive = f"{ triplet }.tar.xz"
-        record = f"{ triplet }.tar.xz.record"
-        cmd = ["tar", "-C", f"{ build }", "-cJf", f"{ archive }", f"{ triplet }"]
-        subprocess.run(cmd)
-
-        # XXX: Figure out why things break when using the tarfile module.
-        with open(record, "w") as rfp:
-            rwriter = csv.writer(rfp)
-            for root, _dirs, files in os.walk(archdir):
-                relroot = pathlib.Path(root).relative_to(build)
-                for f in files:
-                    print(f"Archive {relroot} / {f}")
-                    relpath = relroot / f
-                    with open(relpath, "rb") as fp:
-                        data = fp.read()
-                        hsh = (
-                            base64.urlsafe_b64encode(hashlib.sha256(data).digest())
-                            .rstrip(b"=")
-                            .decode()
-                        )
-                        hashpath = str(pathlib.Path("ppbt") / "_toolchain" / relpath)
-                        rwriter.writerow([hashpath, f"sha256={hsh}", len(data)])
-        print(f"Copying {archive} to {toolchain}")
-        shutil.copy(archive, toolchain)
-        print(f"Copying {record} to {toolchain}")
-        shutil.copy(record, toolchain)
     finally:
         # if archdir and archdir.exists():
         #    shutil.rmtree(archdir)
