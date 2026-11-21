@@ -81,7 +81,7 @@ jobs:
             pkg_dir: packages/cross-x86_64-linux-gnu
     runs-on: ${{ matrix.runs_on }}
     container:
-      image: debian:11
+      image: debian:12
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
