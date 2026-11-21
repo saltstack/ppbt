@@ -15,14 +15,14 @@ jobs:
       contents: write
     steps:
       - name: Download Source Tarballs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: Source Tarball *
           path: dist
           merge-multiple: true
 
       - name: Download Python Wheels
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: Python Wheel *
           path: dist
@@ -32,7 +32,7 @@ jobs:
         run: ls -la dist/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
           tag_name: "v${{ inputs.version }}"
           name: "Release v${{ inputs.version }}"

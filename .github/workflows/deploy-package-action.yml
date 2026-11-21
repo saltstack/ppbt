@@ -9,14 +9,14 @@ jobs:
     environment: release
     steps:
       - name: Download Source Tarballs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: Source Tarball *
           path: dist
           merge-multiple: true
 
       - name: Download Python Wheels
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: Python Wheel *
           path: dist
@@ -26,7 +26,7 @@ jobs:
         run: ls -la dist/
 
       - name: Publish distribution to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
         with:
           verbose: true
           print-hash: true

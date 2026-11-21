@@ -30,10 +30,10 @@ jobs:
     outputs:
       changed-files: ${{ toJSON(steps.changed-files.outputs) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Get Changed Files
         id: changed-files
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         with:
           token: ${{ github.token }}
           list-files: json
@@ -111,20 +111,29 @@ jobs:
       - deploy-python-package
       - create-release
     steps:
-      - name: Get workflow information
-        id: get-workflow-info
-        uses: technote-space/workflow-conclusion-action@v3
-
       - name: Set Pipeline Exit Status
         shell: bash
+        # Roll up the results of the needed jobs into a single pass/fail
+        # for the branch-protection required check.  Replaces
+        # technote-space/workflow-conclusion-action, which was abandoned
+        # on node16 and only emitted this same rollup.  `skipped` is
+        # benign here -- deploy-python-package and create-release
+        # intentionally skip on non-release runs.
         run: |
-          if [ "${{ steps.get-workflow-info.outputs.conclusion }}" != "success" ]; then
-            exit 1
-          else
-            exit 0
-          fi
+          fail=0
+          for result in \
+              "${{ needs.pre-commit.result }}" \
+              "${{ needs.test.result }}" \
+              "${{ needs.deploy-python-package.result }}" \
+              "${{ needs.create-release.result }}" \
+          ; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "non-success job result: $result" >&2; fail=1 ;;
+            esac
+          done
+          exit "$fail"
 
       - name: Done
         if: always()
-        run:
-          echo "All workflows finished"
+        run: echo "All workflows finished"
