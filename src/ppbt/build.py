@@ -18,6 +18,7 @@ import time
 import urllib.error
 import urllib.request
 
+from setuptools.build_meta import build_editable as _build_editable_passthrough
 from setuptools.build_meta import build_sdist, build_wheel
 
 import ppbt.common
@@ -286,3 +287,10 @@ def build_wheel(wheel_directory, metadata_directory=None, config_settings=None):
     """PEP 517 wheel creation hook."""
     build_ppbt()
     return _build_wheel(wheel_directory, metadata_directory, config_settings)
+
+
+def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
+    """PEP 660 editable hook: skip the toolchain build for dev installs."""
+    return _build_editable_passthrough(
+        wheel_directory, config_settings, metadata_directory
+    )

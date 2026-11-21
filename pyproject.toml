@@ -11,3 +11,6 @@ backend-path = ["src"]
 pythonpath = [
   "src"
 ]
+
+[tool.isort]
+profile = "black"

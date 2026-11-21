@@ -4,27 +4,23 @@ on: workflow_call
 
 jobs:
   release:
-    name: Publish Python Wheel
+    name: Publish Python Wheels
     runs-on: ubuntu-latest
     environment: release
     steps:
-      - name: Download Source Tarball
+      - name: Download Source Tarballs
         uses: actions/download-artifact@v4
         with:
-          name: Source Tarball
+          pattern: Source Tarball *
           path: dist
+          merge-multiple: true
 
-      - name: Download x86 Python Package Artifacts
+      - name: Download Python Wheels
         uses: actions/download-artifact@v4
         with:
-          name: Python Wheel x86_64
+          pattern: Python Wheel *
           path: dist
-
-      - name: Download arm64 Python Package Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: Python Wheel aarch64
-          path: dist
+          merge-multiple: true
 
       - name: List dist directory
         run: ls -la dist/

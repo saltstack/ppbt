@@ -1,0 +1,13 @@
+[build-system]
+requires = [
+    "setuptools>=38.6.0",
+    "wheel>=0.31.0",
+    "twine>=1.11.0"
+]
+build-backend = "ppbt_cross_aarch64_linux_gnu.build"
+backend-path = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]

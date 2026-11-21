@@ -24,8 +24,18 @@ on:
 
 jobs:
   build-source:
-    name: Build Python Source Tarball
+    name: Build Source Tarballs
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: ppbt
+            pkg_dir: "."
+          - pkg: ppbt-cross-aarch64-linux-gnu
+            pkg_dir: packages/cross-aarch64-linux-gnu
+          - pkg: ppbt-cross-x86_64-linux-gnu
+            pkg_dir: packages/cross-x86_64-linux-gnu
     steps:
       - uses: actions/checkout@master
       - name: Install build
@@ -33,23 +43,38 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install build
       - name: Build Source Tarball
+        working-directory: ${{ matrix.pkg_dir }}
         run: |
           python3 -m build -s
 
       - name: Python Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Source Tarball
-          path: dist/*
+          name: Source Tarball ${{ matrix.pkg }}
+          path: ${{ matrix.pkg_dir }}/dist/*
           retention-days: 5
 
   build:
     name: Build Python Wheel
     strategy:
+      fail-fast: false
       matrix:
-        host:
-          - x86_64
-          - aarch64
+        # Each cell = one wheel.  The base ``ppbt`` wheel builds on both
+        # arches (native toolchain).  Cross wheels build on their *host*
+        # arch only (an aarch64-linux-gnu cross toolchain runs on x86_64).
+        include:
+          - host: x86_64
+            pkg: ppbt
+            pkg_dir: "."
+          - host: aarch64
+            pkg: ppbt
+            pkg_dir: "."
+          - host: x86_64
+            pkg: ppbt-cross-aarch64-linux-gnu
+            pkg_dir: packages/cross-aarch64-linux-gnu
+          - host: aarch64
+            pkg: ppbt-cross-x86_64-linux-gnu
+            pkg_dir: packages/cross-x86_64-linux-gnu
     runs-on:
       - self-hosted
       - linux
@@ -91,6 +116,7 @@ jobs:
         pip install build wheel setuptools pkginfo
 
     - name: Build Wheel
+      working-directory: ${{ matrix.pkg_dir }}
       run: |
         ${{ inputs.cmd }}
 
@@ -98,11 +124,12 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: Python Wheel ${{ matrix.host }}
-        path: dist/*.whl
+        name: Python Wheel ${{ matrix.pkg }} ${{ matrix.host }}
+        path: ${{ matrix.pkg_dir }}/dist/*.whl
         retention-days: 5
 
     - name: Read Version
+      working-directory: ${{ matrix.pkg_dir }}
       run: >-
         python3
         -c

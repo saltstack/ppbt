@@ -3,6 +3,11 @@
 #
 """
 Toolchain build environment.
+
+The base ``ppbt`` wheel ships only the host native toolchain.  Cross
+toolchains live in sibling packages (``ppbt-cross-<triplet>``) and are
+discovered at runtime via the ``ppbt.toolchains`` entry point so the
+base wheel stays small.
 """
 
 import csv
@@ -11,8 +16,9 @@ import pathlib
 import platform
 import sys
 import tarfile
+from importlib import metadata
 
-__version__ = "0.1.8"
+__version__ = "0.2.0"
 
 log = logging.getLogger(__name__)
 
@@ -35,7 +41,7 @@ def get_triplet(machine=None, plat=None):
     :param plat: The platform for the triplet
     :type plat: str
 
-    :raises BuildError: If the platform is unknown
+    :raises PPBTException: If the platform is unknown
 
     :return: The target triplet
     :rtype: str
@@ -63,14 +69,16 @@ def build_arch():
 
 
 TRIPLET = get_triplet(build_arch())
-ARCHIVE = pathlib.Path(__file__).parent / "_toolchain" / f"{TRIPLET}.tar.xz"
 TOOLCHAIN_ROOT = pathlib.Path(__file__).parent / "_toolchain"
+ARCHIVE = TOOLCHAIN_ROOT / f"{TRIPLET}.tar.xz"
 TOOLCHAIN = TOOLCHAIN_ROOT / TRIPLET
 
 # This is not reliable, the version can be modified by setuptools at build time.
 DISTINFO = (
     pathlib.Path(__file__).resolve().parent.parent / f"ppbt-{__version__}.dist-info"
 )
+
+TOOLCHAINS_ENTRY_POINT = "ppbt.toolchains"
 
 
 def extract_archive(to_dir, archive):
@@ -94,48 +102,215 @@ def extract_archive(to_dir, archive):
         t.extractall(to_dir)
 
 
-def extract(overwrite=False):
+def _toolchain_module(triplet):
     """
-    Extract the toolchain tarball.
+    Return the Python module that ships the toolchain for ``triplet``.
+
+    The base ``ppbt`` package supplies the host native triplet.  Sibling
+    cross packages register additional triplets via the
+    ``ppbt.toolchains`` entry point whose name is the triplet string and
+    whose target is a module exposing ``TRIPLET``, ``TOOLCHAIN_ROOT``,
+    ``ARCHIVE``, ``TOOLCHAIN`` and ``DISTINFO`` at module scope.
+
+    :param triplet: Target triplet.
+    :type triplet: str
+    :return: The module providing the toolchain, or ``None`` if the
+        triplet is not registered.
     """
-    if TOOLCHAIN.exists() and not overwrite:
+    if triplet == TRIPLET:
+        return sys.modules[__name__]
+    try:
+        eps = metadata.entry_points(group=TOOLCHAINS_ENTRY_POINT)
+    except TypeError:
+        # importlib.metadata < 3.10 doesn't take the group kwarg.
+        eps = metadata.entry_points().get(TOOLCHAINS_ENTRY_POINT, [])
+    for ep in eps:
+        if ep.name != triplet:
+            continue
+        try:
+            return ep.load()
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "Failed to load %s entry point %r: %r",
+                TOOLCHAINS_ENTRY_POINT,
+                triplet,
+                exc,
+            )
+            return None
+    return None
+
+
+def archive_for(triplet):
+    """
+    Return the path to the toolchain archive for ``triplet``.
+
+    Base ``ppbt`` supplies the host archive; sibling ``ppbt-cross-*``
+    packages supply cross archives.  The return value is just a path --
+    callers should check existence or use :func:`available_triplets`.
+
+    :param triplet: Target triplet, as produced by :func:`get_triplet`.
+    :type triplet: str
+    :return: Path to ``<triplet>.tar.xz`` inside the providing package.
+    :rtype: pathlib.Path
+    """
+    mod = _toolchain_module(triplet)
+    if mod is None:
+        return TOOLCHAIN_ROOT / f"{triplet}.tar.xz"
+    return pathlib.Path(mod.ARCHIVE)
+
+
+def toolchain_for(triplet):
+    """
+    Return the path where the toolchain for ``triplet`` extracts to.
+
+    :param triplet: Target triplet.
+    :type triplet: str
+    :return: Path to the extracted toolchain directory inside the
+        providing package.
+    :rtype: pathlib.Path
+    """
+    mod = _toolchain_module(triplet)
+    if mod is None:
+        return TOOLCHAIN_ROOT / triplet
+    return pathlib.Path(mod.TOOLCHAIN)
+
+
+def available_triplets():
+    """
+    Return the triplets reachable from this Python install.
+
+    Includes the host triplet (when the base wheel's archive is
+    present) and every triplet registered via a ``ppbt.toolchains``
+    entry point whose provider package has its archive present.
+
+    :return: Triplets with an archive available.
+    :rtype: list[str]
+    """
+    triplets = set()
+    if ARCHIVE.exists():
+        triplets.add(TRIPLET)
+    try:
+        eps = metadata.entry_points(group=TOOLCHAINS_ENTRY_POINT)
+    except TypeError:
+        eps = metadata.entry_points().get(TOOLCHAINS_ENTRY_POINT, [])
+    for ep in eps:
+        if ep.name in triplets:
+            continue
+        try:
+            mod = ep.load()
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "Failed to load %s entry point %r: %r",
+                TOOLCHAINS_ENTRY_POINT,
+                ep.name,
+                exc,
+            )
+            continue
+        if pathlib.Path(mod.ARCHIVE).exists():
+            triplets.add(ep.name)
+    return sorted(triplets)
+
+
+def _extract_toolchain(toolchain_dir, archive, distinfo, overwrite=False):
+    """
+    Extract ``archive`` into ``toolchain_dir`` and merge its RECORD.
+
+    Shared between the base host toolchain and sibling cross packages
+    so RECORD-merging behaviour is defined in one place.
+
+    :param toolchain_dir: Final extracted toolchain directory.
+    :type toolchain_dir: pathlib.Path
+    :param archive: Path to the ``<triplet>.tar.xz`` archive.
+    :type archive: pathlib.Path
+    :param distinfo: Path to the providing wheel's ``*.dist-info``
+        directory (which contains ``RECORD``).
+    :type distinfo: pathlib.Path
+    :param overwrite: Re-extract even if ``toolchain_dir`` exists.
+    :type overwrite: bool
+    """
+    toolchain_dir = pathlib.Path(toolchain_dir)
+    archive = pathlib.Path(archive)
+    distinfo = pathlib.Path(distinfo)
+    if toolchain_dir.exists() and not overwrite:
         log.debug("Toolchain directory exists")
-    else:
-        log.info("Extract archive")
-        extract_archive(TOOLCHAIN_ROOT, str(ARCHIVE))
-        record = DISTINFO / "RECORD"
-        if record.exists():
-            records = []
-            log.info("Update pkg metadata")
-            with open(record, "r") as fp:
-                for row in csv.reader(fp):
-                    records.append(row)
-            with open(str(ARCHIVE) + ".record", "r") as fp:
-                for row in csv.reader(fp):
-                    records.append(row)
-            records = sorted(records, key=lambda _: _[0])
-            with open(record, "w") as fp:
-                writer = csv.writer(fp)
-                for row in records:
-                    writer.writerow(row)
+        return
+    log.info("Extract archive %s", archive)
+    extract_archive(toolchain_dir.parent, str(archive))
+    record = distinfo / "RECORD"
+    archive_record = pathlib.Path(str(archive) + ".record")
+    if record.exists() and archive_record.exists():
+        log.info("Update pkg metadata")
+        records = []
+        with open(record, "r") as fp:
+            records.extend(list(csv.reader(fp)))
+        with open(archive_record, "r") as fp:
+            records.extend(list(csv.reader(fp)))
+        records = sorted(records, key=lambda row: row[0])
+        with open(record, "w") as fp:
+            writer = csv.writer(fp)
+            for row in records:
+                writer.writerow(row)
 
 
-def environ(auto_extract=False):
+def extract(overwrite=False, triplet=None):
     """
-    Toolchain build environment.
+    Extract the toolchain tarball for ``triplet`` (default: host).
+
+    :param overwrite: Re-extract even if the toolchain directory
+        already exists.
+    :type overwrite: bool
+    :param triplet: Target triplet.  Defaults to the host triplet.
+    :type triplet: str or None
+    :raises PPBTException: If no provider is registered for ``triplet``.
     """
-    if not TOOLCHAIN.exists():
+    if triplet is None:
+        triplet = TRIPLET
+    mod = _toolchain_module(triplet)
+    if mod is None:
+        raise PPBTException(
+            f"No toolchain registered for {triplet}; " f"install ppbt-cross-{triplet}?"
+        )
+    _extract_toolchain(
+        pathlib.Path(mod.TOOLCHAIN),
+        pathlib.Path(mod.ARCHIVE),
+        pathlib.Path(mod.DISTINFO),
+        overwrite=overwrite,
+    )
+
+
+def environ(auto_extract=False, triplet=None):
+    """
+    Toolchain build environment for ``triplet`` (default: host).
+
+    :param auto_extract: If True and the toolchain is not yet
+        extracted, extract it.  Otherwise raise.
+    :type auto_extract: bool
+    :param triplet: Target triplet.  Defaults to the host triplet.
+    :type triplet: str or None
+    :raises PPBTException: If no provider is registered for ``triplet``.
+    :raises RuntimeError: If the toolchain is not extracted and
+        ``auto_extract`` is False.
+    """
+    if triplet is None:
+        triplet = TRIPLET
+    mod = _toolchain_module(triplet)
+    if mod is None:
+        raise PPBTException(
+            f"No toolchain registered for {triplet}; " f"install ppbt-cross-{triplet}?"
+        )
+    toolchain_dir = pathlib.Path(mod.TOOLCHAIN)
+    if not toolchain_dir.exists():
         if auto_extract:
-            extract()
+            extract(triplet=triplet)
         else:
             raise RuntimeError("Toolchain not extracted")
-    basebin = TOOLCHAIN / "bin" / TRIPLET
+    basebin = toolchain_dir / "bin" / triplet
     return {
-        "TOOLCHAIN_PATH": f"{TOOLCHAIN}",
+        "TOOLCHAIN_PATH": f"{toolchain_dir}",
         "CC": f"{basebin}-gcc",
         "CXX": f"{basebin}-g++",
-        "CFLAGS": f"-I{TOOLCHAIN}/{TRIPLET}/sysroot/usr/include",
-        "CPPFLAGS": f"-I{TOOLCHAIN}/{TRIPLET}/sysroot/usr/include",
-        "CMAKE_FLAGS": f"-I{TOOLCHAIN}/{TRIPLET}/sysroot/usr/include",
-        "LDFLAGS": f"-L{TOOLCHAIN}/{TRIPLET}/sysroot/lib",
+        "CFLAGS": f"-I{toolchain_dir}/{triplet}/sysroot/usr/include",
+        "CPPFLAGS": f"-I{toolchain_dir}/{triplet}/sysroot/usr/include",
+        "CMAKE_FLAGS": f"-I{toolchain_dir}/{triplet}/sysroot/usr/include",
+        "LDFLAGS": f"-L{toolchain_dir}/{triplet}/sysroot/lib",
     }
