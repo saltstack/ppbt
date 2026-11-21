@@ -30,10 +30,10 @@ jobs:
     outputs:
       changed-files: ${{ toJSON(steps.changed-files.outputs) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Get Changed Files
         id: changed-files
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
         with:
           token: ${{ github.token }}
           list-files: json
@@ -113,7 +113,7 @@ jobs:
     steps:
       - name: Get workflow information
         id: get-workflow-info
-        uses: technote-space/workflow-conclusion-action@v3
+        uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # v3
 
       - name: Set Pipeline Exit Status
         shell: bash
