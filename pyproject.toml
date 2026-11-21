@@ -4,10 +4,13 @@ requires = [
     "wheel>=0.31.0",
     "twine>=1.11.0"
 ]
-build-backend = "ppbt.build"
-backend-path = ["src"]
+build-backend = "_build"
+backend-path = ["."]
 
 [tool.pytest.ini_options]
 pythonpath = [
   "src"
 ]
+
+[tool.isort]
+profile = "black"
